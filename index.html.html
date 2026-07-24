@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Comparador de Temas · Tray — Time de Vendas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#0F1D2E; --ink-2:#3D4F62; --muted:#6B7C8D;
+    --line:#E4EAF0; --line-2:#EEF2F6;
+    --bg:#F4F7FA; --surface:#FFFFFF; --surface-2:#F8FAFC;
+    --teal:#0FB6A0; --teal-deep:#0A8676; --teal-soft:#E3F7F2;
+    --gold:#E19A2E; --gold-soft:#FBF1DD; --gold-line:#F0DcaF;
+    --miss:#B9C4CE;
+    --shadow:0 1px 2px rgba(15,29,46,.04), 0 8px 28px rgba(15,29,46,.06);
+    --shadow-lg:0 12px 40px rgba(15,29,46,.12);
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5}
+  h1,h2,h3,h4{font-family:'Space Grotesk','Inter',sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+  .topbar{background:var(--ink);color:#fff;padding:14px 0}
+  .topbar .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:600}
+  .brand .dot{width:34px;height:34px;border-radius:9px;background:var(--teal);display:grid;place-items:center;flex:none}
+  .brand .dot svg{width:19px;height:19px}
+  .brand small{display:block;font-weight:400;font-size:12px;color:#9FB0BF;letter-spacing:.02em}
+  .brand b{font-family:'Space Grotesk';font-size:16px;letter-spacing:-.01em}
+  .topbar .tag{font-size:12px;color:#9FB0BF;border:1px solid #26384A;border-radius:999px;padding:5px 12px}
+  .hero{padding:34px 0 8px}
+  .hero h1{font-size:clamp(26px,3.4vw,40px);line-height:1.08;letter-spacing:-.02em;margin:0 0 10px;max-width:17ch}
+  .hero h1 .u{color:var(--teal-deep);white-space:nowrap}
+  .hero p.lead{color:var(--ink-2);font-size:16px;max-width:64ch;margin:0}
+  .note{margin-top:16px;background:#FFF9EC;border:1px solid #F1E2BE;color:#8A6A1E;border-radius:12px;padding:12px 15px;font-size:13px;display:flex;gap:10px;align-items:flex-start}
+  .note svg{flex:none;margin-top:1px}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-top:18px}
+  .panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:6px}
+  .panel-head .eyebrow{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .rows{display:flex;flex-direction:column;gap:12px;margin:14px 0 6px}
+  .rowblock{display:flex;flex-direction:column;gap:8px}
+  .row{display:flex;align-items:center;gap:10px}
+  .row .badge{flex:none;width:30px;height:30px;border-radius:8px;background:var(--teal-soft);color:var(--teal-deep);font-weight:700;display:grid;place-items:center;font-family:'Space Grotesk';font-size:14px}
+  .inp{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface-2);transition:border .15s,box-shadow .15s}
+  .inp::placeholder{color:#9AA8B5}
+  .inp:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(15,182,160,.15);background:#fff}
+  textarea.paste{display:none;margin-left:40px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:12.5px;color:var(--ink-2);background:var(--surface-2);min-height:64px;resize:vertical}
+  textarea.paste.on{display:block}
+  .rm{flex:none;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;font-size:17px;line-height:1;display:grid;place-items:center;transition:.15s}
+  .rm:hover{border-color:#F0C4C4;color:#D06767;background:#FDF3F3}
+  .rm[disabled]{opacity:.35;cursor:not-allowed}
+  .panel-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+  .btn{font:inherit;font-weight:600;border-radius:10px;padding:12px 20px;cursor:pointer;border:1px solid transparent;transition:.15s;display:inline-flex;align-items:center;gap:8px}
+  .btn-primary{background:var(--teal);color:#fff;box-shadow:0 6px 16px rgba(15,182,160,.28)}
+  .btn-primary:hover{background:var(--teal-deep)}
+  .btn-primary:disabled{background:#AFC9C4;box-shadow:none;cursor:progress}
+  .btn-ghost{background:#fff;border-color:var(--line);color:var(--ink-2)}
+  .btn-ghost:hover{border-color:var(--teal);color:var(--teal-deep)}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .add-link{background:none;border:none;color:var(--teal-deep);font:inherit;font-weight:600;cursor:pointer;padding:2px 0;font-size:13.5px}
+  .add-link:hover{text-decoration:underline}
+  .add-link[disabled]{opacity:.4;cursor:not-allowed;text-decoration:none}
+  .toggle{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-2);cursor:pointer;user-select:none}
+  .toggle input{display:none}
+  .toggle .sw{width:38px;height:22px;border-radius:999px;background:#D5DEE7;position:relative;transition:.18s;flex:none}
+  .toggle .sw::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:.18s}
+  .toggle input:checked + .sw{background:var(--teal)}
+  .toggle input:checked + .sw::after{transform:translateX(16px)}
+  .status{margin-top:18px;display:none;flex-direction:column;gap:8px}
+  .status.on{display:flex}
+  .stat-line{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--ink-2)}
+  .spin{width:15px;height:15px;border:2px solid var(--teal-soft);border-top-color:var(--teal);border-radius:50%;animation:sp .7s linear infinite;flex:none}
+  .ok{color:var(--teal-deep)} .err{color:#C0554F}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .alert{margin-top:16px;background:#FDF4F3;border:1px solid #F2D6D3;color:#9A423C;border-radius:12px;padding:14px 16px;font-size:14px;display:none}
+  .alert.on{display:block}
+  #results{display:none} #results.on{display:block}
+  .section{margin-top:34px}
+  .sec-title{display:flex;align-items:center;gap:10px;margin:0 0 4px}
+  .sec-title h2{font-size:20px;letter-spacing:-.01em;margin:0}
+  .sec-title .kicker{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal-deep);background:var(--teal-soft);padding:4px 9px;border-radius:6px}
+  .sec-sub{color:var(--muted);font-size:13.5px;margin:2px 0 16px}
+  .verdict{background:linear-gradient(120deg,#12283C,#0F1D2E);color:#fff;border-radius:20px;padding:26px 28px;box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+  .verdict::after{content:"";position:absolute;right:-60px;top:-60px;width:230px;height:230px;border-radius:50%;background:radial-gradient(circle,rgba(225,154,46,.28),transparent 70%)}
+  .verdict .crown{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .verdict h2{font-size:clamp(22px,3vw,30px);margin:0 0 8px;letter-spacing:-.02em}
+  .verdict h2 .win{color:var(--gold)}
+  .verdict p{margin:0;color:#C6D2DD;max-width:74ch;font-size:15px;position:relative;z-index:1}
+  .cards{display:grid;gap:16px;margin-top:6px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;display:flex;flex-direction:column;gap:14px;position:relative}
+  .card.is-win{border-color:var(--gold-line);box-shadow:0 0 0 1px var(--gold-line),0 12px 30px rgba(225,154,46,.14)}
+  .win-flag{position:absolute;top:-11px;left:18px;background:var(--gold);color:#fff;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;display:flex;align-items:center;gap:5px;box-shadow:0 4px 10px rgba(225,154,46,.35)}
+  .card .thumb{width:100%;aspect-ratio:16/10;border-radius:11px;object-fit:cover;background:var(--surface-2);border:1px solid var(--line-2)}
+  .card .cat{font-size:11.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--teal-deep)}
+  .card h3{font-size:18px;margin:2px 0 0;letter-spacing:-.01em;line-height:1.2}
+  .card .dev{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .pill{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:var(--gold-soft);color:#9A6C1A;border:1px solid var(--gold-line);padding:2px 7px;border-radius:999px}
+  .pill.free{background:var(--teal-soft);color:var(--teal-deep);border-color:#BCE9E0}
+  .cover{display:flex;align-items:center;gap:14px;padding:12px;background:var(--surface-2);border-radius:12px;border:1px solid var(--line-2)}
+  .ring{flex:none}
+  .ring text{font-family:'Space Grotesk';fill:var(--ink)}
+  .cover .cov-meta .big{font-family:'Space Grotesk';font-size:15px;font-weight:600;line-height:1.15}
+  .cover .cov-meta .sm{font-size:12px;color:var(--muted);margin-top:3px}
+  .kv{display:flex;flex-direction:column;gap:7px;font-size:13.5px}
+  .kv .k{color:var(--muted)} .kv .v{font-weight:600;color:var(--ink);text-align:right}
+  .kv .line{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+  .price{font-family:'Space Grotesk';font-size:20px;font-weight:600}
+  .price.gratis{color:var(--teal-deep)}
+  .price small{font-family:'Inter';font-weight:500;font-size:12px;color:var(--muted);display:block;margin-top:1px}
+  .card .links{display:flex;gap:8px;margin-top:auto;padding-top:4px}
+  .card .links a{flex:1;text-align:center;font-size:13px;font-weight:600;padding:9px;border-radius:9px;text-decoration:none;border:1px solid var(--line);color:var(--ink-2);transition:.15s}
+  .card .links a:hover{border-color:var(--teal);color:var(--teal-deep)}
+  .crit{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .crit .c{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+  .crit .c .top{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+  .crit .c .ic{width:32px;height:32px;border-radius:9px;background:var(--teal-soft);color:var(--teal-deep);display:grid;place-items:center;flex:none}
+  .crit .c .ic svg{width:17px;height:17px}
+  .crit .c .lab{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .crit .c .who{font-family:'Space Grotesk';font-weight:600;font-size:15.5px;color:var(--ink);line-height:1.2}
+  .crit .c .why{font-size:13.5px;color:var(--ink-2);margin-top:7px;line-height:1.5}
+  .demo{display:grid;gap:16px}
+  .demo .d{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+  .demo .d h4{margin:0 0 3px;font-size:15.5px;letter-spacing:-.01em}
+  .demo .d .src{font-size:12px;color:var(--muted);margin-bottom:14px;word-break:break-all}
+  .metrics{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .metric{background:var(--surface-2);border:1px solid var(--line-2);border-radius:10px;padding:8px 11px;min-width:74px}
+  .metric b{display:block;font-family:'Space Grotesk';font-size:15px;line-height:1.1;color:var(--ink)}
+  .metric span{font-size:10.5px;color:var(--muted);letter-spacing:.02em}
+  .dblock{margin-bottom:13px}
+  .dblock .h{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+  .dblock ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .dblock li{display:flex;gap:8px;font-size:13px;color:var(--ink-2);line-height:1.45}
+  .dblock li .m{flex:none;margin-top:1px}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{font-size:12px;font-weight:500;padding:5px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line)}
+  .chip.y{background:var(--teal-soft);color:var(--teal-deep);border-color:#BCE9E0}
+  .chip.n{background:var(--surface-2);color:var(--miss)}
+  .demo .fail{font-size:13px;color:#9A6A1E;background:#FFF9EC;border:1px solid #F1E2BE;border-radius:10px;padding:10px 12px}
+  .pc{display:grid;gap:16px}
+  .pc .box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+  .pc .box h4{margin:0 0 3px;font-size:16px;letter-spacing:-.01em}
+  .pc .box .ideal{font-size:13px;color:var(--teal-deep);background:var(--teal-soft);border-radius:8px;padding:7px 10px;margin:10px 0 14px}
+  .pc ul{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:7px}
+  .pc li{display:flex;gap:9px;font-size:13.5px;color:var(--ink-2);line-height:1.45}
+  .pc li .m{flex:none;margin-top:2px}
+  .pc .h{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .tbl-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .tbl-wrap{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+  .tbl-scroll{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;min-width:520px}
+  thead th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:13px 16px;border-bottom:1px solid var(--line)}
+  thead th.thm{text-align:center;color:var(--ink);font-family:'Space Grotesk';font-size:13px}
+  thead th.thm.win{color:var(--gold)}
+  tbody td{padding:11px 16px;border-bottom:1px solid var(--line-2);font-size:13.5px;color:var(--ink-2)}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:var(--surface-2)}
+  td.mk{text-align:center;width:120px}
+  .chk{color:var(--teal);font-weight:700}
+  .dash{color:var(--miss)}
+  .cov-row td{background:var(--surface-2);font-weight:600;color:var(--ink)}
+  .cov-row td.mk{font-family:'Space Grotesk'}
+  .guide{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:24px 26px}
+  .guide .gnote{font-size:12.5px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line);border-radius:9px;padding:9px 12px;margin-bottom:20px;display:flex;gap:8px;align-items:flex-start}
+  .gstep{display:flex;gap:16px;padding-bottom:20px;position:relative}
+  .gstep:not(:last-child)::before{content:"";position:absolute;left:15px;top:34px;bottom:0;width:2px;background:var(--line)}
+  .gstep .n{flex:none;width:32px;height:32px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-family:'Space Grotesk';font-weight:700;font-size:14px;z-index:1}
+  .gstep.warn .n{background:#C0703F}
+  .gstep .body{flex:1;min-width:0}
+  .gstep h4{margin:5px 0 8px;font-size:15.5px;letter-spacing:-.01em}
+  .gstep ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+  .gstep li{display:flex;gap:9px;font-size:13.5px;color:var(--ink-2);line-height:1.5}
+  .gstep li .m{flex:none;margin-top:2px;color:var(--teal)}
+  .gstep.warn li .m{color:#C0703F}
+  .say{background:var(--teal-soft);border-left:3px solid var(--teal);border-radius:0 8px 8px 0;padding:9px 12px;font-size:13px;color:var(--teal-deep);margin-top:9px;font-style:italic}
+  .concl{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:14px;padding:22px 24px;box-shadow:var(--shadow)}
+  .concl .tag{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:8px}
+  .concl h3{margin:0 0 10px;font-size:20px;letter-spacing:-.01em}
+  .concl h3 .w{color:var(--teal-deep)}
+  .concl p{margin:0;font-size:15px;color:var(--ink-2);line-height:1.6;max-width:80ch}
+  .pitch{background:linear-gradient(135deg,#0FB6A0,#0A8676);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 12px 34px rgba(10,134,118,.28);position:relative;margin-top:16px}
+  .pitch .lab{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#BdF0E7;display:flex;align-items:center;gap:8px;margin-bottom:11px}
+  .pitch p{margin:0;font-size:16px;line-height:1.6;max-width:80ch}
+  .pitch .copy{position:absolute;top:20px;right:20px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);color:#fff;font:inherit;font-weight:600;font-size:12.5px;padding:8px 13px;border-radius:9px;cursor:pointer;transition:.15s;display:flex;align-items:center;gap:6px}
+  .pitch .copy:hover{background:rgba(255,255,255,.26)}
+  .final-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}
+  .foot{color:var(--muted);font-size:12.5px;text-align:center;padding:38px 20px 30px;max-width:74ch;margin:0 auto;line-height:1.6}
+  .modal{position:fixed;inset:0;background:rgba(15,29,46,.55);backdrop-filter:blur(3px);display:none;place-items:center;z-index:60;padding:20px}
+  .modal.on{display:grid}
+  .modal-card{background:#fff;border-radius:18px;box-shadow:0 24px 60px rgba(15,29,46,.3);padding:26px;width:100%;max-width:420px}
+  .modal-card h3{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}
+  .modal-card .msub{font-size:13.5px;color:var(--muted);margin:0 0 18px;line-height:1.5}
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .field label{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .modal-err{font-size:13px;color:#C0554F;background:#FDF4F3;border:1px solid #F2D6D3;border-radius:9px;padding:9px 11px;margin-bottom:12px;display:none}
+  .modal-err.on{display:block}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:6px}
+  @media(min-width:720px){.cards{grid-template-columns:repeat(2,1fr)}.pc{grid-template-columns:repeat(2,1fr)}.demo{grid-template-columns:repeat(2,1fr)}}
+  @media(min-width:1000px){.cards.n3{grid-template-columns:repeat(3,1fr)}.cards.n4{grid-template-columns:repeat(4,1fr)}.demo.n3{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:520px){.crit{grid-template-columns:1fr}.verdict{padding:22px 20px}.guide{padding:20px 18px}}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wrap">
+  <div class="brand"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span><span><b>Comparador de Temas</b><small>Loja de Temas Tray · Time de Vendas</small></span></div>
+  <span class="tag">Roda no navegador · sem instalação</span>
+</div></header>
+<main class="wrap">
+  <section class="hero">
+    <h1>Compare temas e mostre ao lojista <span class="u">qual converte mais</span>.</h1>
+    <p class="lead">Cole os links de 2 a 4 temas. A ferramenta lê a ficha técnica de cada página, abre a demonstração para analisar o que está ativo na loja e indica o melhor para conversão, navegação e venda — com guia de abordagem e PDF pronto para enviar.</p>
+    <div class="note"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B8912E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8h.01M11 12h1v4h1"/></svg><span>Para ler as páginas direto do navegador, a ferramenta usa um relay público de leitura. Abra este arquivo baixado (ou hospedado) — não precisa de nada instalado. Se algum link não carregar, clique em comparar de novo ou use o modo de colar conteúdo.</span></div>
+    <div class="panel" id="input-panel">
+      <div class="panel-head"><span class="eyebrow">Temas para comparar</span><span class="hint" id="count-hint">2 de 4</span></div>
+      <div class="rows" id="rows"></div>
+      <button class="add-link" id="add-btn">+ Adicionar outro tema</button>
+      <div class="panel-actions">
+        <button class="btn btn-primary" id="compare-btn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Comparar temas</button>
+        <button class="btn btn-ghost" id="example-btn">Usar exemplo</button>
+        <label class="toggle"><input type="checkbox" id="manual-toggle"/><span class="sw"></span>Colar conteúdo manualmente</label>
+      </div>
+      <div class="status" id="status"></div>
+      <div class="alert" id="alert"></div>
+    </div>
+  </section>
+  <section id="results"></section>
+</main>
+<div class="modal" id="pdf-modal">
+  <div class="modal-card">
+    <h3>Gerar PDF para o cliente</h3>
+    <p class="msub">Seus dados entram na assinatura do documento, para o lojista saber com quem falar.</p>
+    <div class="modal-err" id="v-err"></div>
+    <div class="field"><label for="v-nome">Seu nome</label><input class="inp" id="v-nome" type="text" placeholder="Ex.: Ana Souza" autocomplete="name"/></div>
+    <div class="field"><label for="v-fone">Seu telefone</label><input class="inp" id="v-fone" type="tel" placeholder="(11) 99999-9999" autocomplete="tel"/></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="v-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="v-go">Gerar PDF</button>
+    </div>
+  </div>
+</div>
+<p class="foot">Os dados são lidos das páginas públicas de cada tema e da demonstração no momento da comparação. A análise de conversão, navegação e venda segue regras de e-commerce para apoiar o discurso comercial — confira sempre a demonstração ao vivo com o lojista antes de fechar.</p>
+<script>
+const MAX_THEMES=4;
+const EXAMPLES=["https://temas.tray.com.br/temas/vendas-black-white","https://temas.tray.com.br/temas/match-ultra-joias-e-semijoias"];
+const CATEGORIAS=["Moda e Acessórios","Joias","Cosméticos, Saúde e Beleza","Eletrônicos e Games","Casa, Móveis e Decoração","Música e Entretenimento","Esporte e Lazer","Livros, Papelaria e Escritório","Alimentos e Bebidas","Bebês e Crianças","Pet Shop","Ferramentas e Construção","Automotivo","Games"];
+const PROXIES=[
+  u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u),
+  u=>"https://api.codetabs.com/v1/proxy/?quest="+encodeURIComponent(u),
+  u=>"https://corsproxy.io/?url="+encodeURIComponent(u)
+];
+let state={data:[],analysis:null,guide:null,onlyDiff:false};
+let vendedor={nome:'',fone:''};
+
+function deaccent(s){ return (s||"").normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function norm(s){ return deaccent((s||"").toLowerCase()).replace(/\s+/g,' ').trim(); }
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function normUrl(u){ u=(u||"").trim(); if(!u) return ""; if(!/^https?:\/\//i.test(u)) u="https://"+u.replace(/^\/+/,''); return u; }
+function shortUrl(u){ return (u||'').replace(/^https?:\/\//,'').replace(/^temas\.tray\.com\.br\/temas\//,'').replace(/\/$/,''); }
+function listPt(a){ a=(a||[]).filter(Boolean); if(!a.length) return ''; if(a.length===1) return a[0]; return a.slice(0,-1).join(', ')+' e '+a[a.length-1]; }
+function cap(s){ return s? s.charAt(0).toUpperCase()+s.slice(1):s; }
+function lower1(s){ return s? s.charAt(0).toLowerCase()+s.slice(1):s; }
+function maskFone(v){ const d=(v||'').replace(/\D/g,'').slice(0,11); if(!d) return ''; if(d.length<3) return '('+d; if(d.length<=6) return '('+d.slice(0,2)+') '+d.slice(2); if(d.length<=10) return '('+d.slice(0,2)+') '+d.slice(2,6)+'-'+d.slice(6); return '('+d.slice(0,2)+') '+d.slice(2,7)+'-'+d.slice(7); }
+
+const rowsEl=document.getElementById('rows'), addBtn=document.getElementById('add-btn'), countHint=document.getElementById('count-hint'), manualToggle=document.getElementById('manual-toggle');
+function makeRow(value=""){
+  const wrap=document.createElement('div'); wrap.className='rowblock';
+  wrap.innerHTML='<div class="row"><span class="badge"></span><input class="inp" type="url" placeholder="Cole o link do tema…" value="'+value.replace(/"/g,'&quot;')+'" /><button class="rm" title="Remover">&times;</button></div><textarea class="paste '+(manualToggle.checked?'on':'')+'" placeholder="Modo manual: abra a página do tema, use Ctrl+U (código-fonte), Ctrl+A, Ctrl+C e cole aqui."></textarea>';
+  wrap.querySelector('.rm').addEventListener('click',()=>{wrap.remove();refreshRows();});
+  return wrap;
+}
+function refreshRows(){
+  const rows=[...rowsEl.children];
+  rows.forEach((r,i)=>r.querySelector('.badge').textContent=i+1);
+  const rem=rows.length>2; rows.forEach(r=>r.querySelector('.rm').disabled=!rem);
+  addBtn.disabled=rows.length>=MAX_THEMES; countHint.textContent=rows.length+' de '+MAX_THEMES;
+}
+function addRow(v=""){ if(rowsEl.children.length>=MAX_THEMES) return; rowsEl.appendChild(makeRow(v)); refreshRows(); }
+addBtn.addEventListener('click',()=>addRow());
+manualToggle.addEventListener('change',()=>{ document.querySelectorAll('textarea.paste').forEach(t=>t.classList.toggle('on',manualToggle.checked)); });
+document.getElementById('example-btn').addEventListener('click',()=>{ rowsEl.innerHTML=''; EXAMPLES.forEach(u=>addRow(u)); });
+addRow(EXAMPLES[0]); addRow(EXAMPLES[1]);
+
+async function fetchText(url,timeout=15000){
+  let lastErr=null;
+  for(const build of PROXIES){
+    try{
+      const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),timeout);
+      const res=await fetch(build(url),{signal:ctl.signal}); clearTimeout(t);
+      if(!res.ok){ lastErr=new Error('HTTP '+res.status); continue; }
+      const txt=await res.text();
+      if(txt&&txt.length>800) return txt;
+      lastErr=new Error('resposta curta');
+    }catch(e){ lastErr=e; }
+  }
+  throw lastErr||new Error('falha na leitura');
+}
+
+/* ---------- preço: trata tema gratuito corretamente ---------- */
+function extractPrice(dom,bodyText){
+  const out={preco:'',precoNum:0,gratuito:false,parcelamento:''};
+  const head=bodyText.slice(0,3000);
+  const mParc=bodyText.match(/(\d{1,2})\s*x\s*(?:de\s*)?R\$\s*([\d.]+),(\d{2})/i);
+  let alvo=0;
+  if(mParc){ const n=+mParc[1], v=parseFloat(mParc[2].replace(/\./g,'')+'.'+mParc[3]); alvo=n*v; out.parcelamento=mParc[0].replace(/\s+/g,' '); }
+  const gratisForte=/(baixar|instalar|adquirir|obter|download)\s+gr[áa]tis/i.test(head)||/tema\s+gratuito/i.test(head)||/\bR\$\s*0,00\b/.test(head);
+  const cands=[]; const push=(raw,v,w)=>{ const ex=cands.find(c=>c.v===v); if(ex){ ex.w=Math.max(ex.w,w); } else cands.push({raw,v,w}); };
+  try{
+    dom.querySelectorAll('[class*="price"],[class*="Price"],[class*="preco"],[class*="Preco"],[class*="valor"],[id*="price"],[id*="preco"]').forEach(el=>{
+      const tx=(el.textContent||'').replace(/\s+/g,' ').trim();
+      if(!tx||tx.length>140) return;
+      if(/\bgr[áa]tis\b|\bgratuito\b|\bfree\b/i.test(tx)) push('Grátis',0,5);
+      const m=tx.match(/R\$\s*([\d.]+),(\d{2})/);
+      if(m){ const v=parseFloat(m[1].replace(/\./g,'')+'.'+m[2]); push(v===0?'Grátis':'R$ '+m[1]+','+m[2],v,4); }
+    });
+  }catch(e){}
+  (head.match(/R\$\s*[\d.]+,\d{2}/g)||[]).forEach(s=>{ const m=s.match(/R\$\s*([\d.]+),(\d{2})/); const v=parseFloat(m[1].replace(/\./g,'')+'.'+m[2]); push(v===0?'Grátis':'R$ '+m[1]+','+m[2],v,1); });
+  if(/\bgr[áa]tis\b|\bgratuito\b/i.test(head)) push('Grátis',0,gratisForte?6:2);
+  if(gratisForte){ out.preco='Grátis'; out.gratuito=true; out.parcelamento=''; return out; }
+  if(!cands.length){ out.preco='Não informado'; return out; }
+  let best=null;
+  if(alvo>0){ const pagos=cands.filter(c=>c.v>0).sort((a,b)=>Math.abs(a.v-alvo)-Math.abs(b.v-alvo)); if(pagos.length&&Math.abs(pagos[0].v-alvo)/alvo<=0.18) best=pagos[0]; }
+  if(!best) best=cands.slice().sort((a,b)=>b.w-a.w||b.v-a.v)[0];
+  out.preco=best.raw; out.precoNum=best.v; out.gratuito=best.v===0;
+  if(out.gratuito) out.parcelamento='';
+  return out;
+}
+
+/* ---------- recursos: várias estratégias ---------- */
+function extractRecursos(dom){
+  const clean=t=>t.replace(/\s+/g,' ').trim();
+  const valid=t=>t.length>=3&&t.length<=95&&!/^https?:/i.test(t)&&!/^\W+$/.test(t)&&!/^(entrar|cadastrar|carrinho|buscar|menu|home|in[íi]cio)$/i.test(t);
+  let best=[];
+  [...dom.querySelectorAll('ul,ol')].forEach(ul=>{
+    const items=[...ul.querySelectorAll(':scope > li')].map(li=>clean(li.textContent)).filter(valid);
+    if(items.length>best.length) best=items;
+  });
+  if(best.length<5){
+    try{
+      const alt=[...dom.querySelectorAll('[class*="recurso"],[class*="feature"],[class*="resource"]')].map(e=>clean(e.textContent)).filter(valid);
+      if(alt.length>best.length) best=alt;
+    }catch(e){}
+  }
+  const seen=new Set();
+  return best.filter(x=>{ const k=norm(x); if(!k||seen.has(k)) return false; seen.add(k); return true; });
+}
+
+function parseThemePage(html,url){
+  const dom=new DOMParser().parseFromString(html,'text/html');
+  const metaC=n=>{ const el=dom.querySelector('meta[property="'+n+'"],meta[name="'+n+'"]'); return el?el.getAttribute('content'):null; };
+  const bodyText=(dom.body?dom.body.textContent:html).replace(/\s+/g,' ');
+  const nome=((metaC('og:title')||(dom.querySelector('h1')?dom.querySelector('h1').textContent:'')||'').trim()).replace(/\s*[-|]\s*Tray.*$/i,'');
+  const imagem=metaC('og:image');
+  let sup=0,tot=125; const mR=bodyText.match(/suporte\s*[àa]\s*(\d+)\s*de\s*(\d+)\s*recursos/i);
+  if(mR){ sup=+mR[1]; tot=+mR[2]; }
+  const pr=extractPrice(dom,bodyText);
+  let desenvolvedor='',parceiroNivel=null;
+  const mD=bodyText.match(/Desenvolvido por\s+(.+?)(?:\s*Ver tema|\s*R\$|\s*Adicionar|\s*Formas de pagamento|\s*Gr[áa]tis|$)/i);
+  if(mD){ desenvolvedor=mD[1].trim().replace(/\s{2,}/g,' ').slice(0,60);
+    const mDia=desenvolvedor.match(/(.+?)\s*-\s*Parceiro\s+(Diamante|Ouro|Prata|Bronze)/i);
+    if(mDia) parceiroNivel=cap(mDia[2].toLowerCase()); }
+  let categoria=''; for(const c of CATEGORIAS){ if(bodyText.slice(0,4500).includes(c)){ categoria=c; break; } }
+  let ultimaAtualizacao=null; const mU=bodyText.match(/[ÚU]ltima atualiza[çc][ãa]o:?\s*([\d/]+)/i); if(mU) ultimaAtualizacao=mU[1];
+  let urlDemo=null;
+  dom.querySelectorAll('a[href]').forEach(a=>{ const h=a.getAttribute('href')||''; if(!urlDemo&&/commercesuite\.com\.br/i.test(h)&&!/temas\.tray/i.test(h)) urlDemo=h; });
+  if(!urlDemo){ const m=html.match(/https?:\/\/[a-z0-9-]+\.commercesuite\.com\.br[^\s"'<>\\)]*/i); if(m) urlDemo=m[0]; }
+  if(urlDemo) urlDemo=urlDemo.replace(/&amp;/g,'&').replace(/[.,;]$/,'');
+  let itensAdicionais=[]; const mIA=bodyText.match(/Itens adicionais(.+?)(?:Recursos dispon|Ficha t[ée]cnica|$)/i);
+  if(mIA) itensAdicionais=(mIA[1].match(/(?:Suporte|Pacote|Gabarito|Banner|Instala|Configura)[^•·\-–]{3,60}/gi)||[]).map(s=>s.trim()).slice(0,4);
+  const recursos=extractRecursos(dom);
+  if(!sup&&recursos.length) sup=recursos.length;
+  return { url,nome:nome||shortUrl(url),categoria,desenvolvedor,parceiroNivel,preco:pr.preco,precoNum:pr.precoNum,gratuito:pr.gratuito,
+    parcelamento:pr.parcelamento,recursosSuportados:sup,recursosTotais:tot||125,ultimaAtualizacao,
+    descricao:(metaC('og:description')||'').trim(),itensAdicionais,recursos,urlDemo,imagem };
+}
+
+/* ---------- demonstração: análise aprofundada ---------- */
+const DEMO_SIGNALS=[
+  {label:'Botão de WhatsApp',cat:'conversao',rx:/whatsapp|wa\.me|api\.whatsapp/},
+  {label:'Compra rápida',cat:'conversao',rx:/compra-rapida|compra rapida|quick-?buy|quick-?add|comprar-rapido/},
+  {label:'Contador regressivo',cat:'conversao',rx:/countdown|cronometro|regressiv|contador/},
+  {label:'Popup de cupom',cat:'conversao',rx:/cupom|coupon|promo-?code/},
+  {label:'Botão comprar flutuante',cat:'conversao',rx:/buy-?fixed|comprar-flutuante|sticky-?buy|floating-?buy/},
+  {label:'Carrinho lateral',cat:'venda',rx:/carrinho-lateral|side-?cart|mini-?cart|cart-drawer|carrinho lateral/},
+  {label:'Compre junto',cat:'venda',rx:/compre-junto|compre junto|buy-together|order-?bump/},
+  {label:'Barra de frete grátis',cat:'venda',rx:/frete-gratis|frete gratis|free-shipping/},
+  {label:'Cálculo de frete',cat:'venda',rx:/calcular-frete|calculo de frete|cep|shipping-calc/},
+  {label:'Kit de produtos',cat:'venda',rx:/kit-de-produtos|kit de produtos|bundle/},
+  {label:'Filtro de produtos',cat:'navegacao',rx:/filtro|filter|refine|facet/},
+  {label:'Busca com sugestões',cat:'navegacao',rx:/autocomplete|sugest|search-suggest|typeahead/},
+  {label:'Menu multinível',cat:'navegacao',rx:/submenu|sub-menu|dropdown|megamenu|mega-menu/},
+  {label:'Paginação infinita',cat:'navegacao',rx:/infinite|carregar-mais|load-?more|paginacao/},
+  {label:'Zoom na imagem',cat:'navegacao',rx:/zoom|magnif/},
+  {label:'Voltar ao topo',cat:'navegacao',rx:/back-?to-?top|voltar-ao-topo|scroll-?top/},
+  {label:'Estrelas de avaliação',cat:'social',rx:/rating|estrela|trustvox|yourviews|star-rating|avaliacao/},
+  {label:'Comentários no produto',cat:'social',rx:/coment|review|depoiment/},
+  {label:'Selos de segurança',cat:'social',rx:/selo|security-seal|seguranca|ssl|site-?blindado/},
+  {label:'Redes sociais',cat:'social',rx:/facebook|instagram|tiktok|youtube/},
+  {label:'Feed do Instagram',cat:'marketing',rx:/instagram-feed|feed-instagram|instafeed/},
+  {label:'Newsletter / popup',cat:'marketing',rx:/newsletter|pop-?up|modal-news/},
+  {label:'Banner rotativo',cat:'marketing',rx:/swiper|slick|carousel|carrossel|slider/},
+  {label:'Vídeo na home',cat:'marketing',rx:/youtube|vimeo|<video/},
+  {label:'Blog / notícias',cat:'marketing',rx:/\/blog|noticias|novidades/}
+];
+function analyzeDemo(html,url){
+  const h=norm(html);
+  const title=((html.match(/<title[^>]*>([^<]*)<\/title>/i)||[])[1]||'').trim();
+  const signals=DEMO_SIGNALS.map(s=>({label:s.label,cat:s.cat,found:s.rx.test(h)}));
+  const found=c=>signals.filter(s=>s.cat===c&&s.found).map(s=>s.label);
+  const has=l=>signals.some(s=>s.label===l&&s.found);
+  const imagens=(html.match(/<img\b/gi)||[]).length;
+  const scripts=(html.match(/<script\b/gi)||[]).length;
+  const secoes=(html.match(/<section\b/gi)||[]).length;
+  const pesoKb=Math.round(html.length/1024);
+  const prodLinks=(html.match(/href="[^"]*\/(produto|product)s?\//gi)||[]).length;
+  const prodBlocks=(html.match(/class="[^"]*(product|produto)[^"]*"/gi)||[]).length;
+  const produtos=Math.max(prodLinks,Math.round(prodBlocks/4));
+  const mobileOk=/name="viewport"/i.test(html);
+  const pagamento=/(visa|mastercard|boleto|\bpix\b|elo|amex)/i.test(h);
+  const metrics={imagens,scripts,secoes,pesoKb,produtos,mobileOk,pagamento};
+  const impressoes=[],positivos=[],atencao=[];
+  if(produtos>=12) impressoes.push('Vitrine cheia: cerca de '+produtos+' blocos de produto já na página inicial — bom para catálogo grande e para o cliente ver variedade logo de cara.');
+  else if(produtos>=4) impressoes.push('Home com aproximadamente '+produtos+' produtos em destaque — vitrine enxuta, foco em curadoria.');
+  else impressoes.push('A home carregou poucos blocos de produto na leitura automática; vale conferir a vitrine ao vivo com o cliente.');
+  if(secoes>=6) impressoes.push('Layout modular com cerca de '+secoes+' seções na home — dá margem para banners, vitrines e provas sociais sem poluir.');
+  if(imagens>=25) impressoes.push('Página bastante visual (~'+imagens+' imagens), o que favorece segmentos que vendem pelo apelo da foto.');
+  else if(imagens) impressoes.push('Uso moderado de imagens (~'+imagens+'), layout mais direto ao ponto.');
+  if(pesoKb<400) impressoes.push('Página leve (~'+pesoKb+' KB no HTML) — tende a abrir rápido, o que ajuda na conversão em 4G.');
+  else if(pesoKb>1500) impressoes.push('HTML pesado (~'+pesoKb+' KB) e '+scripts+' scripts — vale testar a velocidade no celular antes de prometer performance.');
+  else impressoes.push('Peso de página equilibrado (~'+pesoKb+' KB, '+scripts+' scripts).');
+  if(mobileOk) impressoes.push('Configuração responsiva presente — a demo se adapta ao celular.');
+  const fc=found('conversao'), fv=found('venda'), fn=found('navegacao'), fs=found('social'), fm=found('marketing');
+  if(fc.length) positivos.push('Jornada de compra encurtada: '+listPt(fc.map(lower1))+(fc.length>1?' ativos':' ativo')+' na demo.');
+  if(fv.length) positivos.push('Fechamento facilitado com '+listPt(fv.map(lower1))+' — menos passos entre o clique e o pedido.');
+  if(fn.length) positivos.push('Cliente acha o produto rápido: '+listPt(fn.map(lower1))+'.');
+  if(fs.length) positivos.push('Confiança na primeira compra: '+listPt(fs.map(lower1))+'.');
+  if(fm.length) positivos.push('Ferramentas de captação e recompra: '+listPt(fm.map(lower1))+'.');
+  if(pagamento) positivos.push('Rodapé exibe bandeiras e formas de pagamento — reforço de credibilidade.');
+  if(!has('Botão de WhatsApp')) atencao.push('Não identificamos botão de WhatsApp — se o lojista vende muito por atendimento, confirme ao vivo.');
+  if(!has('Estrelas de avaliação')&&!has('Comentários no produto')) atencao.push('Sem sinal de avaliações/comentários na demo — prova social pode exigir app externo.');
+  if(!has('Filtro de produtos')) atencao.push('Filtro não detectado — atenção se o catálogo do cliente for grande.');
+  if(!has('Carrinho lateral')) atencao.push('Carrinho lateral não detectado nesta página da demo.');
+  return { ok:true,url,title,signals,detectedCount:signals.filter(s=>s.found).length,metrics,impressoes,positivos,atencao };
+}
+const KW={
+  conversao:['compra rapida','order bump','compre junto','desconto progressivo','brinde','contador','cronometro','regressiv','botao comprar flutuante','whatsapp na vitrine','whatsapp na pagina','cupom','tag de desconto','tags de destaque','vitrine de promocoes','vitrine de mais vendidos','ultimos produtos','popup de banner'],
+  venda:['carrinho lateral','order bump','compre junto','kit de produtos','botao comprar flutuante','frete gratis','calculo de frete','validacao de estoque','desconto progressivo','cupom','barra de frete'],
+  navegacao:['filtro','menu com sub','submenu','sub-categorias','paginacao','carregamento infinito','sugestoes de busca','topo flutuante','voltar ao topo','comparacao de produtos','carrossel de categorias','link personalizado no menu','tabela de medidas','zoom'],
+  social:['estrela','avaliacao','comentario','depoimento','selo','seguranca'],
+  marketing:['newsletter','pixel','instagram','banner','shorts','popup','fidelizacao','pontos','google maps','cookies'],
+  mobile:['mobile','responsivo','2 produtos por linha','regua','banner mobile']
+};
+function matched(rec,b){ const k=KW[b]; return (rec||[]).filter(r=>{const n=norm(r); return k.some(x=>n.includes(x));}); }
+function demoBonus(t,c){ if(!t.demo||!t.demo.ok) return 0; return 0.5*t.demo.signals.filter(s=>s.cat===c&&s.found).length; }
+function featureUnion(data){
+  const map=new Map();
+  data.forEach(t=>(t.recursos||[]).forEach(f=>{const k=norm(f); if(k&&!map.has(k)) map.set(k,f);}));
+  return [...map.entries()].map(([k,label])=>({key:k,label,has:data.map(t=>(t.recursos||[]).some(f=>norm(f)===k))}));
+}
+const CRIT_META={
+  conversao:{lab:'Conversão',ic:'<path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/>'},
+  navegacao:{lab:'Navegação',ic:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'},
+  venda:{lab:'Venda / Fechamento',ic:'<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>'},
+  custoBeneficio:{lab:'Custo-benefício',ic:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.2a2.5 2 0 0 1 5 .3c0 1.6-2.5 1.9-2.5 3M12 16.5v.01"/>'}
+};
+function buildAnalysis(data){
+  data.forEach(t=>{
+    t._m={conversao:matched(t.recursos,'conversao'),venda:matched(t.recursos,'venda'),navegacao:matched(t.recursos,'navegacao'),social:matched(t.recursos,'social'),marketing:matched(t.recursos,'marketing')};
+    t._s={conversao:t._m.conversao.length+demoBonus(t,'conversao'),venda:t._m.venda.length+demoBonus(t,'venda'),navegacao:t._m.navegacao.length+demoBonus(t,'navegacao'),
+      custoBeneficio: t.precoNum>0 ? (t.recursosSuportados/(t.precoNum/1000)) : (t.gratuito? t.recursosSuportados*100 : 0)};
+  });
+  const winnerBy=k=>{ let b=data[0]; data.forEach(t=>{ if(t._s[k]>b._s[k]) b=t; }); return b; };
+  const keys=['conversao','navegacao','venda','custoBeneficio'];
+  const weights={conversao:3,venda:3,navegacao:2,custoBeneficio:1.6};
+  const pts={}; data.forEach(t=>pts[t.nome]=0);
+  const criterios={};
+  keys.forEach(k=>{ const w=winnerBy(k); pts[w.nome]+=weights[k]; criterios[k]={vencedor:w.nome,motivo:critReason(k,w,data)}; });
+  let winner=data[0];
+  data.forEach(t=>{ if(pts[t.nome]>pts[winner.nome]||(pts[t.nome]===pts[winner.nome]&&t.recursosSuportados>winner.recursosSuportados)) winner=t; });
+  const runnerUp=data.filter(t=>t!==winner).sort((a,b)=>pts[b.nome]-pts[a.nome]||b.recursosSuportados-a.recursosSuportados)[0];
+  const won=keys.filter(k=>norm(criterios[k].vencedor)===norm(winner.nome)).map(k=>CRIT_META[k].lab.split(' / ')[0].toLowerCase());
+  const temas=data.map(t=>buildProsCons(t,data,winner));
+  const resumo=winner.nome+' reúne '+winner.recursosSuportados+' recursos disponíveis'+(won.length?' e lidera em '+listPt(won):'')+' — a base mais forte para converter.';
+  const runnerReason=runnerUp?(runnerUp.gratuito?'o cliente quiser começar sem investimento (é gratuito)':(runnerUp.precoNum&&winner.precoNum&&runnerUp.precoNum<winner.precoNum?'o orçamento for o fator decisivo (é mais econômico: '+runnerUp.preco+')':'o perfil da loja combinar mais com '+(runnerUp.categoria||'o segmento dele'))):'';
+  let demoFrase='';
+  if(winner.demo&&winner.demo.ok){
+    const pos=winner.demo.positivos[0];
+    demoFrase='Na demonstração, confirmamos '+winner.demo.detectedCount+' recursos ativos'+(pos?' — '+lower1(pos):'')+' ';
+  }
+  const conclusao='Entre os '+data.length+' temas analisados, o '+winner.nome+' é a indicação principal. São '+winner.recursosSuportados+' recursos disponíveis'+(won.length?' e liderança em '+listPt(won)+'. ':'. ')+strengthSentence(winner)+' '+demoFrase+'Indicado para '+perfil(winner)+'.'+(runnerUp?' O '+runnerUp.nome+' é uma alternativa quando '+runnerReason+'.':'');
+  const topConv=winner._m.conversao.slice(0,3);
+  const pitch='Para a sua loja, indico o '+winner.nome+': ele foi feito para vender. '+(topConv.length?'Traz recursos de conversão como '+listPt(topConv.map(lower1))+', que aceleram o cliente até a compra. ':'')+(winner._m.navegacao.length?'A navegação é fluida, com '+listPt(winner._m.navegacao.slice(0,2).map(lower1))+'. ':'')+'São '+winner.recursosSuportados+' recursos disponíveis'+(winner.parceiroNivel?', desenvolvido por um parceiro '+winner.parceiroNivel:'')+(winner.gratuito?' e sem custo de licença':'')+' — a escolha mais segura para aumentar as vendas desde o primeiro dia.';
+  return {vencedorGeral:winner.nome,resumo,conclusao,criterios,temas,pitch,_winner:winner,_runnerUp:runnerUp};
+}
+function critReason(key,w,data){
+  const o=data.filter(t=>t!==w)[0];
+  if(key==='conversao'){ const l=w._m.conversao.slice(0,3).map(lower1); return 'Traz '+w._m.conversao.length+' recursos de conversão'+(l.length?' (ex.: '+listPt(l)+')':'')+(o?', contra '+o._m.conversao.length+' do '+o.nome:'')+'.'; }
+  if(key==='venda'){ const l=w._m.venda.slice(0,3).map(lower1); return 'Facilita o fechamento com '+(l.length?listPt(l):w._m.venda.length+' recursos de checkout')+(o?', à frente do '+o.nome:'')+'.'; }
+  if(key==='navegacao'){ const l=w._m.navegacao.slice(0,3).map(lower1); return 'Melhor experiência de navegação'+(l.length?': '+listPt(l):'')+(o?', contra '+o._m.navegacao.length+' recursos do '+o.nome:'')+'.'; }
+  if(key==='custoBeneficio'){
+    if(w.gratuito) return 'É gratuito e ainda entrega '+w.recursosSuportados+' recursos — melhor relação de custo do comparativo, sem investimento inicial em licença.';
+    const rp=w.precoNum?(w.recursosSuportados/(w.precoNum/1000)).toFixed(1):'—';
+    return 'Melhor custo-benefício: '+w.recursosSuportados+' recursos por '+(w.preco||'—')+' ('+rp+' recursos a cada R$1.000)'+(o&&o.precoNum?', mais que o '+o.nome:'')+'.';
+  }
+  return '';
+}
+function strengthSentence(t){
+  const s=[];
+  if(t._m.conversao.length>=3) s.push('recursos de conversão e urgência');
+  if(t._m.venda.length>=3) s.push('ferramentas de fechamento no carrinho');
+  if(t._m.navegacao.length>=3) s.push('navegação e busca refinadas');
+  if(t._m.social.length>=2) s.push('prova social');
+  if(!s.length) return 'Entrega um conjunto sólido de recursos para o dia a dia da loja.';
+  return 'Destaca-se por '+listPt(s)+'.';
+}
+function perfil(t){
+  const c=norm(t.categoria);
+  if(/joia|semijoia|relogio|luxo/.test(c)) return 'marcas que valorizam sofisticação e uma vitrine premium';
+  if(/moda|acessorio|calcado|sapato|roupa/.test(c)) return 'lojas de moda com catálogo grande e giro rápido';
+  if(/cosmetico|beleza|saude/.test(c)) return 'lojas de beleza que trabalham recompra e kits';
+  if(/eletronico|game|informatica/.test(c)) return 'lojas de eletrônicos com foco em ficha técnica e comparação';
+  if(/casa|movel|decoracao/.test(c)) return 'lojas de casa e decoração com muitas fotos';
+  if(/aliment|bebida/.test(c)) return 'lojas de alimentos e bebidas com compra recorrente';
+  if(/pet/.test(c)) return 'pet shops com recompra e assinatura';
+  return 'lojas que querem escalar vendas com um layout completo';
+}
+function buildProsCons(t,data,winner){
+  const pros=['Reúne '+t.recursosSuportados+' recursos disponíveis'];
+  if(t.gratuito) pros.push('Tema gratuito — sem custo de licença');
+  if(t._m.conversao.length>=2) pros.push('Conversão: '+listPt(t._m.conversao.slice(0,3)));
+  if(t._m.venda.length>=2) pros.push('Fechamento: '+listPt(t._m.venda.slice(0,3)));
+  if(t._m.navegacao.length>=2) pros.push('Navegação: '+listPt(t._m.navegacao.slice(0,3)));
+  if(t._m.social.length>=1) pros.push('Prova social: '+listPt(t._m.social.slice(0,3)));
+  if(t.demo&&t.demo.ok&&t.demo.detectedCount) pros.push('Confirmado na demo: '+listPt(t.demo.signals.filter(s=>s.found).slice(0,4).map(s=>s.label)));
+  if(t.parceiroNivel) pros.push('Desenvolvido por parceiro '+t.parceiroNivel);
+  const idx=data.indexOf(t);
+  const falta=featureUnion(data).filter(f=>!f.has[idx]&&f.has.some(Boolean)).map(f=>f.label);
+  const contras=[];
+  if(t!==winner) contras.push('Menos recursos que o '+winner.nome+' ('+t.recursosSuportados+' contra '+winner.recursosSuportados+')');
+  if(falta.length) contras.push('Sem: '+listPt(falta.slice(0,4))+(falta.length>4?' (+'+(falta.length-4)+')':''));
+  if(t.precoNum>0&&data.some(o=>o.precoNum<t.precoNum)) contras.push('Preço mais alto do comparativo ('+t.preco+')');
+  if(t.demo&&t.demo.ok&&t.demo.atencao.length) contras.push(t.demo.atencao[0]);
+  if(!contras.length) contras.push('Sem ressalvas relevantes neste comparativo');
+  return {nome:t.nome,pros,contras,idealPara:perfil(t)};
+}
+/* ---------- guia do vendedor (não vai para o PDF) ---------- */
+function buildGuide(data,A){
+  const w=A._winner, alt=A._runnerUp;
+  const conv=w._m.conversao.slice(0,3).map(lower1);
+  const nav=w._m.navegacao.slice(0,2).map(lower1);
+  const totalRec=featureUnion(data).length;
+  const caro=[...data].sort((a,b)=>b.precoNum-a.precoNum)[0];
+  const barato=[...data].sort((a,b)=>a.precoNum-b.precoNum)[0];
+  const dif=(caro.precoNum-barato.precoNum);
+  const steps=[];
+  steps.push({n:1,t:'Antes de mostrar tema, diagnostique (2 a 3 minutos)',b:[
+    'Pergunte: "o que hoje mais te incomoda na sua loja?" — a resposta define qual recurso você vai destacar.',
+    'Levante três números: tamanho do catálogo, quanto das visitas vem do celular e se ele já vende por WhatsApp.',
+    'Anote a dor principal em uma palavra: abandono, catálogo, visual, celular ou preço.'],
+    say:'"Antes de eu te mostrar qualquer layout, me conta: o que você sente que está travando as vendas hoje?"'});
+  steps.push({n:2,t:'Abra a demonstração antes da lista de recursos',b:[
+    'Mostre a demo do '+w.nome+' primeiro — e, se possível, no celular. É onde a maioria das lojas vende.',
+    'Deixe o cliente navegar sozinho por uns 30 segundos, sem narrar. A primeira impressão visual vende mais que qualquer tabela.',
+    'Só depois pergunte o que ele achou. O que ele elogiar espontaneamente vira o seu argumento principal.']});
+  steps.push({n:3,t:'Mostre primeiro o que vira dinheiro',b:[
+    (conv.length?'Comece pelos recursos de conversão do '+w.nome+': '+listPt(conv)+'.':'Comece pelos recursos que encurtam o caminho até a compra.'),
+    'Traduza cada recurso em resultado, nunca em nome técnico. Ex.: carrinho lateral = o cliente não sai da vitrine para comprar.',
+    'Ordem que funciona: aparência → jornada de compra → recursos de venda → preço. Preço sempre por último.']});
+  steps.push({n:4,t:'Aprofunde só no critério que casa com a dor dele',b:[
+    'Dor de abandono de carrinho → foque em conversão e fechamento (use o card "Conversão" e "Venda" deste comparativo).',
+    'Catálogo grande → foque em navegação: '+(nav.length?listPt(nav):'filtros e busca')+'.',
+    'Tráfego alto no celular → foque nos recursos mobile e mostre a demo no próprio celular dele.',
+    'Orçamento apertado → leve a conversa para custo-benefício'+(barato.gratuito?' e apresente a opção gratuita como porta de entrada':'')+'.']});
+  steps.push({n:5,t:'Onde NÃO se alongar',warn:true,b:[
+    'Não leia a lista completa de recursos em voz alta — são '+totalRec+' itens neste comparativo. Isso cansa e dilui o que importa. Eles vão no PDF.',
+    'Não entre em detalhe de instalação, código ou customização a menos que o cliente pergunte. Isso é conversa de pós-venda.',
+    'Não fale mal do outro tema. Posicione-o como "feito para outro perfil de loja" — assim você preserva as duas opções.',
+    'Não compare recurso a recurso se o cliente já demonstrou preferência. Comparação demais gera dúvida e adia a decisão.']});
+  steps.push({n:6,t:'Como apresentar a comparação',b:[
+    'Máximo de dois temas lado a lado. Três ou mais confunde e trava a decisão.',
+    'Apresente o '+w.nome+' como a recomendação'+(alt?' e o '+alt.nome+' como plano B, sempre com um motivo claro':'')+'.',
+    (dif>0?'A diferença de preço no comparativo é de R$ '+dif.toFixed(2).replace('.',',')+'. Se ela vier à tona, divida pelo parcelamento e compare com o valor de uma única venda perdida.':'Se o preço vier à tona, compare com o valor de uma única venda perdida por mês.'),
+    'Use o botão "Mostrar só as diferenças" na tabela: é a forma mais rápida de responder "mas qual a diferença entre eles?".']});
+  steps.push({n:7,t:'Objeções que vão aparecer',b:[
+    '"Está caro" → volte para a dor do diagnóstico e mostre qual recurso resolve exatamente aquilo. Preço se discute depois do valor.',
+    '"Os dois parecem iguais" → abra a tabela filtrada por diferenças e cite dois ou três recursos que só o recomendado tem.',
+    '"Vou pensar" → ofereça enviar o PDF na hora e já proponha uma data para retomar. Sem data marcada, a conversa esfria.',
+    '"Meu tema atual funciona" → pergunte quanto ele perde por mês com carrinho abandonado. O tema é investimento, não custo.']});
+  steps.push({n:8,t:'Fechamento',b:[
+    'Recapitule em uma frase só — use o argumento pronto da seção acima, sem improvisar.',
+    'Confirme o encaixe: "faz sentido para o que você me falou no começo?" Deixe ele concordar em voz alta.',
+    'Proponha um próximo passo concreto e pequeno: enviar o PDF, agendar a instalação ou fechar hoje.',
+    'Envie o PDF ao final da conversa, nunca no começo — se ele receber antes, para de ouvir e começa a ler.']});
+  return {steps,winnerNome:w.nome};
+}
+const statusEl=document.getElementById('status'),alertEl=document.getElementById('alert'),compareBtn=document.getElementById('compare-btn'),resultsEl=document.getElementById('results');
+function setStatus(lines){
+  statusEl.className='status on';
+  statusEl.innerHTML=lines.map(l=>{const i=l.s==='load'?'<span class="spin"></span>':l.s==='ok'?'<span class="ok">✓</span>':l.s==='err'?'<span class="err">✕</span>':'<span>•</span>';return '<div class="stat-line">'+i+'<span>'+esc(l.t)+'</span></div>';}).join('');
+}
+compareBtn.addEventListener('click',run);
+async function run(){
+  alertEl.className='alert'; resultsEl.className=''; resultsEl.innerHTML='';
+  const entries=[...rowsEl.children].map(b=>({url:normUrl(b.querySelector('.inp').value),paste:b.querySelector('.paste').value.trim()})).filter(e=>e.url||e.paste);
+  if(entries.length<2){ alertEl.className='alert on'; alertEl.textContent='Informe pelo menos 2 temas para comparar.'; return; }
+  compareBtn.disabled=true;
+  const lines=entries.map(e=>({s:'load',t:'Lendo '+(shortUrl(e.url)||'conteúdo colado')+'…'}));
+  setStatus(lines);
+  const data=[];
+  for(let i=0;i<entries.length;i++){
+    const e=entries[i];
+    try{
+      const html=(e.paste&&e.paste.length>500)?e.paste:await fetchText(e.url);
+      const t=parseThemePage(html,e.url||'');
+      if(!t.recursos.length&&!t.recursosSuportados) throw new Error('sem dados');
+      lines[i]={s:'load',t:'Analisando demonstração de '+t.nome+'…'}; setStatus(lines);
+      t.demo={ok:false,url:t.urlDemo};
+      if(t.urlDemo){
+        for(let tent=0;tent<2&&!t.demo.ok;tent++){
+          try{ const dh=await fetchText(t.urlDemo,13000); t.demo=analyzeDemo(dh,t.urlDemo); }catch(_){}
+        }
+      }
+      data.push(t);
+      lines[i]={s:'ok',t:'Lido: '+t.nome+' — '+t.recursosSuportados+' recursos'+(t.demo.ok?' · demo analisada ('+t.demo.detectedCount+' sinais)':' · demo não pôde ser lida')};
+    }catch(err){ lines[i]={s:'err',t:'Não consegui ler '+(shortUrl(e.url)||'o item '+(i+1))+'. Tente de novo ou use o modo manual.'}; }
+    setStatus(lines);
+  }
+  if(data.length<2){ alertEl.className='alert on'; alertEl.textContent='Não consegui ler pelo menos 2 temas. Clique em comparar de novo, ou ative "Colar conteúdo manualmente" e cole o código-fonte das páginas.'; compareBtn.disabled=false; statusEl.className='status'; return; }
+  setStatus([...lines,{s:'load',t:'Montando comparação, conclusão e guia…'}]);
+  try{
+    const analysis=buildAnalysis(data);
+    state.data=data; state.analysis=analysis; state.guide=buildGuide(data,analysis); state.onlyDiff=false;
+    statusEl.className='status'; statusEl.innerHTML='';
+    render(); resultsEl.scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(err){ alertEl.className='alert on'; alertEl.textContent='Erro ao montar a análise: '+(err.message||err); }
+  compareBtn.disabled=false;
+}
+function isWinner(n){ return state.analysis&&norm(n)===norm(state.analysis.vencedorGeral); }
+function ring(t){
+  const pct=Math.max(6,Math.min(100,Math.round(100*(t.recursosSuportados||0)/(t.recursosTotais||125))));
+  const r=34,c=2*Math.PI*r,off=c*(1-pct/100);
+  const col=pct>=66?'var(--teal)':pct>=40?'var(--gold)':'#C77B6E';
+  return '<svg class="ring" width="82" height="82" viewBox="0 0 82 82"><circle cx="41" cy="41" r="'+r+'" fill="none" stroke="var(--line)" stroke-width="8"/><circle cx="41" cy="41" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="8" stroke-linecap="round" stroke-dasharray="'+c.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'" transform="rotate(-90 41 41)"/><text x="41" y="47" text-anchor="middle" font-size="22" font-weight="700">'+(t.recursosSuportados||0)+'</text></svg>';
+}
+function render(){
+  const D=state.data,A=state.analysis,n=D.length,nc=n>=4?'n4':n===3?'n3':'';
+  const h=[];
+  h.push('<div class="section"><div class="verdict"><div class="crown"><svg width="15" height="15" viewBox="0 0 24 24" fill="var(--gold)"><path d="M3 7l4 4 5-7 5 7 4-4-2 12H5z"/></svg>Recomendação do time de vendas</div><h2>Indique o <span class="win">'+esc(A.vencedorGeral)+'</span></h2><p>'+esc(A.resumo)+'</p></div></div>');
+  h.push('<div class="section"><div class="sec-title"><span class="kicker">Panorama</span><h2>Os temas em números</h2></div><p class="sec-sub">Recursos disponíveis, preço e quem desenvolveu.</p><div class="cards '+nc+'">'+D.map(cardHtml).join('')+'</div></div>');
+  h.push('<div class="section"><div class="sec-title"><span class="kicker">Veredito</span><h2>Qual ganha em cada frente</h2></div><p class="sec-sub">O que destacar conforme a dor do lojista.</p><div class="crit">'+Object.keys(CRIT_META).map(k=>critHtml(k,A.criterios&&A.criterios[k])).join('')+'</div></div>');
+  h.push('<div class="section"><div class="sec-title"><span class="kicker">Demonstração</span><h2>Análise da loja de exemplo</h2></div><p class="sec-sub">Impressões, pontos positivos e sinais encontrados ao abrir a demonstração de cada tema.</p><div class="demo '+nc+'">'+D.map(demoHtml).join('')+'</div></div>');
+  h.push('<div class="section"><div class="sec-title"><span class="kicker">Argumentos</span><h2>Pontos fortes, ressalvas e para quem indicar</h2></div><div class="pc '+nc+'">'+A.temas.map(pcHtml).join('')+'</div></div>');
+  h.push('<div class="section"><div class="sec-title"><span class="kicker">Ficha técnica</span><h2>Recursos disponíveis e indisponíveis</h2></div><p class="sec-sub">Todos os recursos citados nas fichas, com quem tem cada um.</p><div class="tbl-tools"><label class="toggle"><input type="checkbox" id="diff-toggle" '+(state.onlyDiff?'checked':'')+'/><span class="sw"></span>Mostrar só as diferenças</label><span class="hint" id="feat-count"></span></div><div class="tbl-wrap"><div class="tbl-scroll">'+tableHtml()+'</div></div></div>');
+  h.push('<div class="section"><div class="concl"><div class="tag">Conclusão e indicação</div><h3>Indicação: <span class="w">'+esc(A.vencedorGeral)+'</span></h3><p>'+esc(A.conclusao)+'</p></div><div class="pitch"><button class="copy" id="copy-pitch"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copiar</button><div class="lab"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#BdF0E7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>Argumento pronto para usar</div><p id="pitch-text">'+esc(A.pitch)+'</p></div></div>');
+  h.push(guideHtml());
+  h.push('<div class="section"><div class="final-actions"><button class="btn btn-primary" id="pdf-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15l3 3 3-3"/></svg>Gerar PDF para o cliente</button><button class="btn btn-ghost" id="copy-summary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copiar resumo</button></div></div>');
+  resultsEl.innerHTML=h.join(''); resultsEl.className='on'; wireResults();
+}
+function cardHtml(t){
+  const win=isWinner(t.nome);
+  return '<div class="card '+(win?'is-win':'')+'">'+(win?'<span class="win-flag"><svg width="11" height="11" viewBox="0 0 24 24" fill="#fff"><path d="M3 7l4 4 5-7 5 7 4-4-2 12H5z"/></svg>Recomendado</span>':'')+(t.imagem?'<img class="thumb" src="'+esc(t.imagem)+'" alt="" loading="lazy" onerror="this.style.display=\'none\'"/>':'')+'<div><div class="cat">'+esc(t.categoria||'Tema')+'</div><h3>'+esc(t.nome)+'</h3><div class="dev">'+(t.desenvolvedor?'por '+esc(t.desenvolvedor):'')+' '+(t.parceiroNivel?'<span class="pill">'+esc(t.parceiroNivel)+'</span>':'')+(t.gratuito?'<span class="pill free">Grátis</span>':'')+'</div></div><div class="cover">'+ring(t)+'<div class="cov-meta"><div class="big">recursos<br/>disponíveis</div><div class="sm">identificados na ficha técnica</div></div></div><div class="kv"><div class="line"><span class="k">Preço</span><span class="v price '+(t.gratuito?'gratis':'')+'">'+esc(t.preco||'—')+'<small>'+esc(t.parcelamento||'')+'</small></span></div>'+(t.ultimaAtualizacao?'<div class="line"><span class="k">Atualizado</span><span class="v">'+esc(t.ultimaAtualizacao)+'</span></div>':'')+((t.itensAdicionais&&t.itensAdicionais.length)?'<div class="line"><span class="k">Inclui</span><span class="v">'+esc(t.itensAdicionais.join(' · '))+'</span></div>':'')+'</div><div class="links"><a href="'+esc(t.url)+'" target="_blank" rel="noopener">Página</a>'+(t.urlDemo?'<a href="'+esc(t.urlDemo)+'" target="_blank" rel="noopener">Ver demo</a>':'')+'</div></div>';
+}
+function critHtml(k,o){ const m=CRIT_META[k]; if(!o) return ''; return '<div class="c"><div class="top"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+m.ic+'</svg></span><span class="lab">'+m.lab+'</span></div><div class="who">'+esc(o.vencedor)+'</div><div class="why">'+esc(o.motivo)+'</div></div>'; }
+function demoHtml(t){
+  if(!t.demo||!t.demo.ok) return '<div class="d"><h4>'+esc(t.nome)+'</h4><div class="fail">A demonstração não pôde ser lida automaticamente'+(t.urlDemo?' ('+esc(shortUrl(t.urlDemo))+')':' — link da demo não encontrado na página')+'. Abra a demo pelo card acima e avalie ao vivo com o cliente.</div></div>';
+  const d=t.demo,m=d.metrics;
+  const met='<div class="metrics">'+
+    '<div class="metric"><b>'+d.detectedCount+'</b><span>SINAIS ATIVOS</span></div>'+
+    '<div class="metric"><b>~'+m.produtos+'</b><span>PRODUTOS NA HOME</span></div>'+
+    '<div class="metric"><b>'+m.secoes+'</b><span>SEÇÕES</span></div>'+
+    '<div class="metric"><b>~'+m.imagens+'</b><span>IMAGENS</span></div>'+
+    '<div class="metric"><b>'+m.pesoKb+' KB</b><span>PESO DO HTML</span></div>'+
+    '<div class="metric"><b>'+(m.mobileOk?'Sim':'—')+'</b><span>RESPONSIVO</span></div></div>';
+  const blk=(t2,arr,mk,cls)=>arr&&arr.length?'<div class="dblock '+(cls||'')+'"><div class="h">'+t2+'</div><ul>'+arr.map(x=>'<li><span class="m">'+mk+'</span><span>'+esc(x)+'</span></li>').join('')+'</ul></div>':'';
+  const chips='<div class="dblock"><div class="h">Sinais verificados</div><div class="chips">'+d.signals.map(s=>'<span class="chip '+(s.found?'y':'n')+'">'+(s.found?'✓':'·')+' '+esc(s.label)+'</span>').join('')+'</div></div>';
+  return '<div class="d"><h4>'+esc(t.nome)+'</h4><div class="src">'+esc(d.url)+'</div>'+met+blk('Impressões da demonstração',d.impressoes,'<span style="color:var(--teal-deep)">›</span>')+blk('Pontos positivos identificados',d.positivos,'<span class="chk">✓</span>')+blk('Pontos de atenção',d.atencao,'<span style="color:#C0703F">!</span>')+chips+'</div>';
+}
+function pcHtml(t){
+  const win=isWinner(t.nome);
+  const li=(a,mk)=>(a||[]).map(x=>'<li><span class="m">'+mk+'</span><span>'+esc(x)+'</span></li>').join('');
+  return '<div class="box" style="'+(win?'border-color:var(--gold-line)':'')+'"><h4>'+esc(t.nome)+'</h4>'+(t.idealPara?'<div class="ideal"><b>Ideal para:</b> '+esc(t.idealPara)+'</div>':'')+'<div class="h">Pontos fortes</div><ul>'+li(t.pros,'<span class="chk">✓</span>')+'</ul><div class="h">Ressalvas</div><ul>'+li(t.contras,'<span class="dash">–</span>')+'</ul></div>';
+}
+function tableHtml(){
+  const f=featureUnion(state.data),D=state.data;
+  const shown=state.onlyDiff?f.filter(x=>!x.has.every(Boolean)&&x.has.some(Boolean)):f;
+  const th=D.map(t=>'<th class="thm '+(isWinner(t.nome)?'win':'')+'">'+esc(t.nome)+'</th>').join('');
+  const cov='<tr class="cov-row"><td>Total de recursos disponíveis</td>'+D.map(t=>'<td class="mk">'+(t.recursosSuportados||0)+'</td>').join('')+'</tr>';
+  const body=shown.map(x=>'<tr><td>'+esc(x.label)+'</td>'+x.has.map(v=>'<td class="mk">'+(v?'<span class="chk">✓</span>':'<span class="dash">–</span>')+'</td>').join('')+'</tr>').join('');
+  const empty=shown.length?'':'<tr><td colspan="'+(D.length+1)+'" style="text-align:center;color:var(--muted);padding:22px">Nenhuma diferença nos recursos listados.</td></tr>';
+  return '<table><thead><tr><th>Recurso</th>'+th+'</tr></thead><tbody>'+cov+body+empty+'</tbody></table>';
+}
+function guideHtml(){
+  const g=state.guide; if(!g) return '';
+  const steps=g.steps.map(s=>'<div class="gstep '+(s.warn?'warn':'')+'"><div class="n">'+s.n+'</div><div class="body"><h4>'+esc(s.t)+'</h4><ul>'+s.b.map(x=>'<li><span class="m">'+(s.warn?'✕':'✓')+'</span><span>'+esc(x)+'</span></li>').join('')+'</ul>'+(s.say?'<div class="say">'+esc(s.say)+'</div>':'')+'</div></div>').join('');
+  return '<div class="section"><div class="sec-title"><span class="kicker">Só para o vendedor</span><h2>Guia de abordagem</h2></div><p class="sec-sub">Como conduzir a conversa do diagnóstico ao fechamento.</p><div class="guide"><div class="gnote"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Uso interno. Esta seção <b>não</b> entra no PDF enviado ao cliente.</span></div>'+steps+'</div></div>';
+}
+function wireResults(){
+  const diff=document.getElementById('diff-toggle'),fc=document.getElementById('feat-count');
+  if(fc) fc.textContent=featureUnion(state.data).length+' recursos no total';
+  if(diff) diff.addEventListener('change',e=>{state.onlyDiff=e.target.checked; const w=document.querySelector('.tbl-scroll'); if(w) w.innerHTML=tableHtml();});
+  const cp=document.getElementById('copy-pitch'); if(cp) cp.addEventListener('click',()=>copyText(state.analysis.pitch,cp,'Copiado ✓'));
+  const cs=document.getElementById('copy-summary'); if(cs) cs.addEventListener('click',()=>copyText(buildSummary(),cs,'Resumo copiado ✓'));
+  const pb=document.getElementById('pdf-btn'); if(pb) pb.addEventListener('click',openPdfModal);
+}
+function copyText(t,btn,ok){ navigator.clipboard.writeText(t).then(()=>{const o=btn.innerHTML;btn.innerHTML=ok;setTimeout(()=>btn.innerHTML=o,1600);}).catch(()=>{}); }
+function buildSummary(){
+  const A=state.analysis,D=state.data,L=[];
+  L.push('COMPARAÇÃO DE TEMAS — TRAY'); L.push('Indicação: '+A.vencedorGeral); L.push(A.resumo); L.push('');
+  D.forEach(t=>L.push('• '+t.nome+' — '+t.recursosSuportados+' recursos disponíveis · '+t.preco+(t.parcelamento?' ('+t.parcelamento+')':'')+(t.desenvolvedor?' · por '+t.desenvolvedor:'')));
+  L.push(''); L.push('VEREDITO POR CRITÉRIO');
+  const m={conversao:'Conversão',navegacao:'Navegação',venda:'Venda',custoBeneficio:'Custo-benefício'};
+  Object.keys(m).forEach(k=>{const o=A.criterios[k]; if(o) L.push('- '+m[k]+': '+o.vencedor+' — '+o.motivo);});
+  L.push(''); L.push('CONCLUSÃO'); L.push(A.conclusao); L.push(''); L.push('ARGUMENTO DE VENDA'); L.push(A.pitch);
+  return L.join('\n');
+}
+/* ---------- modal de assinatura ---------- */
+const modal=document.getElementById('pdf-modal'),vNome=document.getElementById('v-nome'),vFone=document.getElementById('v-fone'),vErr=document.getElementById('v-err');
+function openPdfModal(){ vNome.value=vendedor.nome; vFone.value=vendedor.fone; vErr.className='modal-err'; modal.className='modal on'; setTimeout(()=>vNome.focus(),80); }
+function closePdfModal(){ modal.className='modal'; }
+document.getElementById('v-cancel').addEventListener('click',closePdfModal);
+modal.addEventListener('click',e=>{ if(e.target===modal) closePdfModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&modal.classList.contains('on')) closePdfModal(); });
+vFone.addEventListener('input',e=>{ e.target.value=maskFone(e.target.value); });
+[vNome,vFone].forEach(el=>el.addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('v-go').click(); }));
+document.getElementById('v-go').addEventListener('click',()=>{
+  const nome=vNome.value.trim(), fone=vFone.value.trim();
+  if(nome.length<2){ vErr.className='modal-err on'; vErr.textContent='Informe seu nome para assinar o documento.'; vNome.focus(); return; }
+  if(fone.replace(/\D/g,'').length<10){ vErr.className='modal-err on'; vErr.textContent='Informe um telefone válido com DDD.'; vFone.focus(); return; }
+  vendedor={nome,fone}; closePdfModal(); generatePDF();
+});
+/* ---------- PDF ---------- */
+function unavailableFor(t){ const u=featureUnion(state.data),i=state.data.indexOf(t); return u.filter(f=>!f.has[i]).map(f=>f.label); }
+function generatePDF(){
+  if(!window.jspdf){ alert('Biblioteca de PDF não carregou. Verifique a conexão e recarregue a página.'); return; }
+  try{
+    const jsPDF=window.jspdf.jsPDF, doc=new jsPDF({unit:'pt',format:'a4'});
+    const P={W:595.28,H:841.89,mL:48,mR:48,mT:54,mB:64},CW=P.W-P.mL-P.mR; let y=P.mT;
+    const A=state.analysis,D=state.data;
+    const INK=[15,29,46],TEAL=[15,182,160],TEALd=[10,134,118],GOLD=[196,133,26],MUT=[107,124,141],LINE=[228,234,240],MISS=[150,164,178];
+    const F=(s,z)=>{doc.setFont('helvetica',s);doc.setFontSize(z);};
+    const T=c=>doc.setTextColor(c[0],c[1],c[2]);
+    const Fl=c=>doc.setFillColor(c[0],c[1],c[2]);
+    const Dr=c=>doc.setDrawColor(c[0],c[1],c[2]);
+    const need=h=>{ if(y+h>P.H-P.mB){ doc.addPage(); y=P.mT; } };
+    const para=(t,z,c,s,lh)=>{ F(s||'normal',z); T(c||INK); const ls=doc.splitTextToSize(t||'',CW); const H=lh||z*1.4; ls.forEach(l=>{need(H);doc.text(l,P.mL,y);y+=H;}); };
+    const sub=(t,c)=>{ need(16); F('bold',9.5); T(c||TEALd); doc.text(t.toUpperCase(),P.mL,y); y+=13; };
+    const chk=(x,t)=>{ Dr(TEAL); doc.setLineWidth(1.6); doc.line(x+1,t+4.5,x+3.3,t+7); doc.line(x+3.3,t+7,x+7.6,t+1.4); };
+    const crs=(x,t)=>{ Dr(MISS); doc.setLineWidth(1.4); doc.line(x+1.6,t+1.6,x+7,t+7); doc.line(x+7,t+1.6,x+1.6,t+7); };
+    const bullets=(items,kind)=>{ const z=9.5,lh=13.5,ind=16; if(!items||!items.length){para('—',z,MUT);return;} items.forEach(it=>{ F('normal',z); const ls=doc.splitTextToSize(it,CW-ind); need(lh*ls.length); const top=y-8; if(kind==='check') chk(P.mL+2,top); else if(kind==='cross') crs(P.mL+2,top); else {Fl(TEAL);doc.circle(P.mL+5,y-3,1.6,'F');} T(kind==='cross'?MUT:INK); F('normal',z); ls.forEach(l=>{doc.text(l,P.mL+ind,y);y+=lh;}); }); };
+    Fl(INK); doc.rect(0,0,P.W,84,'F'); Fl(TEAL); doc.rect(0,84,P.W,3,'F');
+    T([255,255,255]); F('bold',18); doc.text('Comparação de Temas',P.mL,42);
+    F('normal',10.5); T([180,196,210]); doc.text('Comparativo de recursos e recomendação · Loja de Temas Tray',P.mL,60);
+    F('normal',10); doc.text(new Date().toLocaleDateString('pt-BR'),P.W-P.mR,42,{align:'right'});
+    y=113;
+    Fl([251,241,221]); doc.roundedRect(P.mL,y,CW,58,8,8,'F'); Dr([240,220,175]); doc.setLineWidth(1); doc.roundedRect(P.mL,y,CW,58,8,8,'S');
+    F('bold',9.5); T(GOLD); doc.text('INDICAÇÃO',P.mL+16,y+20); F('bold',15); T(INK); doc.text(A.vencedorGeral,P.mL+16,y+40); y+=74;
+    F('normal',9.5); T(MUT); doc.text('Temas comparados: '+D.map(t=>t.nome).join('  ·  '),P.mL,y); y+=16;
+    D.forEach((t,i)=>{
+      need(130); y+=6;
+      F('bold',15); T(INK); need(20); doc.text((i+1)+'. '+t.nome,P.mL,y); y+=17;
+      const meta=[t.categoria,(t.desenvolvedor?'por '+t.desenvolvedor+(t.parceiroNivel?' ('+t.parceiroNivel+')':''):''),(t.preco?t.preco+(t.parcelamento?' · '+t.parcelamento:''):''),t.recursosSuportados+' recursos disponíveis'].filter(Boolean).join('   |   ');
+      para(meta,9.5,MUT,'normal',13); y+=2;
+      const m2=A.temas.find(x=>norm(x.nome)===norm(t.nome))||{pros:[],idealPara:''};
+      if(m2.idealPara){ F('italic',9.5); T(TEALd); need(14); doc.text('Ideal para: '+m2.idealPara,P.mL,y); y+=15; }
+      sub('Pontos fortes',TEALd); bullets(m2.pros,'dot'); y+=4;
+      if(t.demo&&t.demo.ok&&t.demo.positivos.length){ sub('Observado na demonstração',TEALd); bullets(t.demo.positivos,'dot'); y+=4; }
+      sub('Recursos disponíveis',TEALd); bullets(t.recursos&&t.recursos.length?t.recursos:['Lista não identificada'],'check'); y+=4;
+      const falta=unavailableFor(t);
+      sub('Recursos indisponíveis neste tema',[150,120,40]);
+      if(falta.length){ F('normal',8.5); T(MUT); need(12); doc.text('(presentes em outro tema comparado, ausentes neste)',P.mL,y); y+=12; bullets(falta,'cross'); }
+      else para('Nenhum — cobre todos os recursos citados no comparativo.',9.5,MUT);
+      y+=8; Dr(LINE); doc.setLineWidth(.8); need(10); doc.line(P.mL,y,P.mL+CW,y); y+=6;
+    });
+    doc.addPage(); y=P.mT;
+    Fl([251,241,221]); doc.roundedRect(P.mL,y,CW,64,8,8,'F'); Dr([240,220,175]); doc.roundedRect(P.mL,y,CW,64,8,8,'S');
+    F('bold',9.5); T(GOLD); doc.text('CONCLUSÃO E INDICAÇÃO',P.mL+16,y+22); F('bold',16); T(INK); doc.text(A.vencedorGeral,P.mL+16,y+44); y+=82;
+    para(A.conclusao,10.5,INK,'normal',15); y+=8;
+    sub('Veredito por critério',TEALd);
+    const cm={conversao:'Conversão',navegacao:'Navegação',venda:'Venda / Fechamento',custoBeneficio:'Custo-benefício'};
+    Object.keys(cm).forEach(k=>{const o=A.criterios[k]; if(!o) return; F('bold',9.5); T(INK); need(13); doc.text(cm[k]+': '+o.vencedor,P.mL,y); y+=12; para(o.motivo,9.5,MUT,'normal',12); y+=4;});
+    y+=6; sub('Argumento de fechamento',TEALd);
+    F('normal',10.5); const pls=doc.splitTextToSize(A.pitch,CW-28); const bh=pls.length*15+22; need(bh);
+    Fl([227,247,242]); doc.roundedRect(P.mL,y,CW,bh,8,8,'F'); T(INK); let py=y+18; pls.forEach(l=>{doc.text(l,P.mL+14,py);py+=15;}); y+=bh+26;
+    need(96);
+    Dr(LINE); doc.setLineWidth(1); doc.line(P.mL,y,P.mL+CW,y); y+=20;
+    F('bold',9); T(TEALd); doc.text('PREPARADO POR',P.mL,y);
+    F('normal',9); T(MUT); doc.text(new Date().toLocaleDateString('pt-BR'),P.W-P.mR,y,{align:'right'}); y+=19;
+    F('bold',13); T(INK); doc.text(vendedor.nome,P.mL,y); y+=16;
+    F('normal',10.5); T(MUT); doc.text(vendedor.fone,P.mL,y); y+=14;
+    F('normal',9.5); T(MUT); doc.text('Consultor(a) de vendas · Loja de Temas Tray',P.mL,y);
+    const pc=doc.getNumberOfPages();
+    for(let p=1;p<=pc;p++){ doc.setPage(p); F('normal',8); T(MUT);
+      doc.text('Comparação de Temas · '+vendedor.nome+' · '+vendedor.fone,P.mL,P.H-22);
+      doc.text(p+'/'+pc,P.W-P.mR,P.H-22,{align:'right'}); }
+    const slug=D.map(t=>norm(t.nome).replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')).slice(0,2).join('-vs-');
+    doc.save('comparacao-'+(slug||'temas')+'.pdf');
+  }catch(e){ alert('Não consegui gerar o PDF: '+(e.message||e)); }
+}
+refreshRows();
+</script>
+</body>
+</html>
