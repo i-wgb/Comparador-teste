@@ -363,7 +363,7 @@
   </div>
 </div>
 
-<p class="ver-stamp">v3.0.0 · Análise de Performance e UX · Expansão · Time Comercial</p>
+<p class="ver-stamp">v3.0.1 · Análise de Performance e UX · Expansão · Time Comercial</p>
 <p class="foot">O diagnóstico é montado a partir do que está visível no código público da loja no momento da análise. A recomendação de tema cruza o segmento detectado com as lacunas encontradas; os temas e valores vêm do catálogo da Loja de Temas Tray e podem mudar — confira sempre a página e a demonstração vigentes antes de fechar. Os dados de mercado citados são de referências públicas (Baymard Institute, Opinion Box/Octadesk, ABComm) e servem de apoio ao discurso, não como promessa de resultado.</p>
 
 <script>
@@ -1639,20 +1639,23 @@ function parseTemaPagina(html){
 
   /* preco do tema - busca padroes especificos da Loja de Temas Tray */
   const precoTemaMatch=(()=>{
-    // 1. padrao "compra unica" proximo de R$
-    const m1=T.match(/compra.nica.{0,30}R\$\s*([\d.]{1,9},\d{2})/i)
-           || T.match(/R\$\s*([\d.]{1,9},\d{2}).{0,30}compra.nica/i)
-           || T.match(/(?:por|valor)\s+R\$\s*([\d.]{1,9},\d{2})/i);
-    if(m1) return parseFloat(m1[1].replace(/\./g,'').replace(',','.'));
-    // 2. todos os valores R$ - filtra plausivel para preco de tema (R$50 a R$30.000)
+    // Loja de Temas: 'R$ 664,0030% OFFR$ 464,80ou 12x' — preco COM desconto
+    const mOff=T.match(/R\$\s*([\d.]{1,9},\d{2})\s*\d+%\s*OFF\s*R\$\s*([\d.]{1,9},\d{2})/i);
+    if(mOff) return parseFloat(mOff[2].replace(/\./g,'').replace(',','.'));
+    // sem desconto: primeiro R$ antes de 'ou 12x' ou 'sem juros'
+    const mSimples=T.match(/R\$\s*([\d.]{1,9},\d{2})\s*(?:ou\s*12x|sem\s*juros)/i);
+    if(mSimples) return parseFloat(mSimples[1].replace(/\./g,'').replace(',','.'));
+    // 'Subtotal (1) R$ X' = valor final
+    const mSub=T.match(/Subtotal[^R]{0,20}R\$\s*([\d.]{1,9},\d{2})/i);
+    if(mSub) return parseFloat(mSub[1].replace(/\./g,'').replace(',','.'));
+    // fallback: primeiro R$ entre R$50 e R$5000 (exclui servicos caros)
     const todos=[...(T.matchAll(/R\$\s*([\d.]{1,9},\d{2})/g))]
-      .map(m=>parseFloat(m[1].replace(/\./g,'').replace(',','.')))
-      .filter(v=>v>=50&&v<=30000);
-    if(!todos.length) return null;
-    return Math.max(...todos);
+      .map(m=>parseFloat(m[1].replace(/\./g,'').replace(',','.'))) 
+      .filter(v=>v>=50&&v<=5000);
+    return todos.length?todos[0]:null;
   })();
   if(precoTemaMatch!=null){ rec.preco=precoTemaMatch; }
-  else if(/tema\s+gr.tis|gr.tis\s+para\s+sempre|free\s+plan/i.test(T)){ rec.preco=0; }
+  else if(/tema gr.tis|gr.tis para sempre|free plan/i.test(T)&&!T.match(/R\$\s*[\d.]+,\d{2}/)){rec.preco=0;}
   else rec.preco=null;
 
   /* desenvolvedor + diamante */
@@ -2617,16 +2620,23 @@ function analisarSeoProduto(html, url){
 
 function extrairUsername(url, rede){
   try{
-    const pu=new URL(url);
+    // remove parâmetros UTM/âncoras antes de parsear
+    const cleanUrl=(url||'').split('?')[0].split('#')[0].trim();
+    const pu=new URL(cleanUrl.startsWith('http')?cleanUrl:'https://'+cleanUrl);
     const path=pu.pathname.replace(/\/+$/,'');
     const segs=path.split('/').filter(Boolean);
     if(!segs.length) return null;
-    // Instagram/Facebook/TikTok: primeiro segmento válido após o domínio
-    const user=segs[0].replace(/^@/,'');
+    const user=segs[0].replace(/^@/,'').trim();
     if(user.length<2||user.length>60) return null;
-    if(/^(shop|explore|p|reel|stories|tv|hashtag|tags|direct|accounts|legal)$/i.test(user)) return null;
+    if(/^(shop|explore|p|reel|stories|tv|hashtag|tags|direct|accounts|legal|help|about|privacy|terms|ads|business)$/i.test(user)) return null;
     return user;
   }catch(e){ return null; }
+}
+
+function fetchComTimeout(url,opts,ms){
+  const ctrl=new AbortController();
+  const tid=setTimeout(()=>ctrl.abort(),ms||8000);
+  return fetch(url,Object.assign({},opts||{},{signal:ctrl.signal})).finally(()=>clearTimeout(tid));
 }
 
 function formatarSeguidores(n){
@@ -2645,7 +2655,7 @@ async function lerSeguidoresInstagram(username){
   for(const ep of endpoints){
     for(const relay of ['https://api.allorigins.win/raw?url=','https://corsproxy.io/?url=']){
       try{
-        const r=await fetch(relay+encodeURIComponent(ep),{headers:{'User-Agent':'Mozilla/5.0'},signal:AbortSignal.timeout(8000)});
+        const r=await fetch(relay+encodeURIComponent(ep),{headers:{'User-Agent':'Mozilla/5.0'}});
         if(!r.ok) continue;
         const j=await r.json();
         // formato web_profile_info
@@ -2658,7 +2668,7 @@ async function lerSeguidoresInstagram(username){
   // fallback: og:description da página pública
   for(const relay of ['https://api.allorigins.win/raw?url=','https://corsproxy.io/?url=']){
     try{
-      const r=await fetch(relay+encodeURIComponent('https://www.instagram.com/'+username+'/'),{headers:{'User-Agent':'facebookexternalhit/1.1'},signal:AbortSignal.timeout(8000)});
+      const r=await fetch(relay+encodeURIComponent('https://www.instagram.com/'+username+'/'),{headers:{'User-Agent':'facebookexternalhit/1.1'}});
       const html=await r.text();
       // "X Followers, Y Following, Z Posts"
       const m=html.match(/([\d,]+(?:\.\d+)?[KkMm]?)\s+Followers?/i);
@@ -2680,7 +2690,7 @@ async function lerSeguidoresInstagram(username){
 async function lerSeguidoresTikTok(username){
   for(const relay of ['https://api.allorigins.win/raw?url=','https://corsproxy.io/?url=']){
     try{
-      const r=await fetch(relay+encodeURIComponent('https://www.tiktok.com/@'+username),{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},signal:AbortSignal.timeout(10000)});
+      const r=await fetch(relay+encodeURIComponent('https://www.tiktok.com/@'+username),{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}});
       const html=await r.text();
       // JSON blob hidratado no HTML
       const m=html.match(/"followerCount"\s*:\s*(\d+)/);
@@ -2767,6 +2777,34 @@ async function lerRedesSociais(html, origin){
 }
 
 
+async function lerSemrush(domain){
+  const cleanDomain=domain.replace(/^https?:\/\//,'').replace(/\/.*$/,'');
+  const semUrl='https://www.semrush.com/website/'+cleanDomain+'/overview/';
+  const relays=['https://api.allorigins.win/raw?url=','https://corsproxy.io/?url='];
+  for(const relay of relays){
+    try{
+      const r=await fetchComTimeout(relay+encodeURIComponent(semUrl),{},12000);
+      if(!r.ok) continue;
+      const html=await r.text();
+      if(html.length<500) continue;
+      const mVis=html.match(/"visits"\s*:\s*(\d+)/)||html.match(/"monthlyVisits"\s*:\s*(\d+)/);
+      const mOrg=html.match(/"organicTraffic"\s*:\s*(\d+)/)||html.match(/"organic"\s*:\s*\{[^}]{0,30}"value"\s*:\s*(\d+)/);
+      const mAuth=html.match(/"authorityScore"\s*:\s*(\d+)/);
+      const mPaid=html.match(/"paidTraffic"\s*:\s*(\d+)/)||html.match(/"paid"\s*:\s*\{[^}]{0,30}"value"\s*:\s*(\d+)/);
+      if(mVis||mOrg||mAuth){
+        return {
+          visitas:mVis?parseInt(mVis[1],10):null,
+          organico:mOrg?parseInt(mOrg[1],10):null,
+          pago:mPaid?parseInt(mPaid[1],10):null,
+          authority:mAuth?parseInt(mAuth[1],10):null,
+          domain:cleanDomain
+        };
+      }
+    }catch(e){}
+  }
+  return null;
+}
+
 /* ---------- 8. fluxo e render ---------- */
 let state={loja:null,fortes:[],fracos:[],faltantes:[],melhorias:[],temas:[],args:null,guia:null,concl:''};
 let vendedor={nome:'',fone:''};
@@ -2796,8 +2834,13 @@ async function run(){
     // lê uma página de produto (o cálculo de frete, avaliações e "compre junto" vivem no produto)
     // lê redes sociais da loja
     if(lojaUrl){
-      lines[1]={s:'load',t:'Lendo redes sociais da loja…'}; setStatus(lines);
-      try{ extras.redes=await lerRedesSociais(html, originOf(lojaUrl)); }catch(e){ extras.redes={}; }
+      lines[1]={s:'load',t:'Lendo redes sociais e tráfego…'}; setStatus(lines);
+      const [redesResult,semrushResult]=await Promise.allSettled([
+        lerRedesSociais(html,originOf(lojaUrl)),
+        lerSemrush(lojaUrl)
+      ]);
+      extras.redes=redesResult.status==='fulfilled'?redesResult.value||{}:{};
+      extras.semrush=semrushResult.status==='fulfilled'?semrushResult.value||null:null;
     }
     if(lojaUrl){ const org=originOf(lojaUrl);
       let urls=[]; if(extras.produtoUrl) urls.push(extras.produtoUrl);
@@ -2852,7 +2895,8 @@ async function run(){
     const uxDiag=montarUXDiag(loja);
     const seoProdutos=(loja.extras&&loja.extras.seoProdutos)||[];
     const redesSociais=(loja.extras&&loja.extras.redes)||{};
-    state={loja,fortes,fracos,faltantes,melhorias,temas,args,guia,uxDiag,seoProdutos,redesSociais,concl:''};
+    const semrush=(loja.extras&&loja.extras.semrush)||null;
+    state={loja,fortes,fracos,faltantes,melhorias,temas,args,guia,uxDiag,seoProdutos,redesSociais,semrush,concl:''};
     const nVer=temas.filter(t=>t.verificado).length;
     lines[3]={s:'ok',t:'Temas recomendados ('+nVer+'/'+temas.length+' confirmados na demo): '+temas.map(t=>t.tema.n).join(' · ')}; setStatus(lines);
     setTimeout(()=>{ statusEl.className='status'; statusEl.innerHTML=''; },700);
