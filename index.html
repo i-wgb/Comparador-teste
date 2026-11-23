@@ -364,7 +364,7 @@
   </div>
 </div>
 
-<p class="ver-stamp">v3.1.0 · Análise de Performance e UX · Expansão · Time Comercial</p>
+<p class="ver-stamp">v3.1.1 · Análise de Performance e UX · Expansão · Time Comercial</p>
 <p class="foot">O diagnóstico é montado a partir do que está visível no código público da loja no momento da análise. A recomendação de tema cruza o segmento detectado com as lacunas encontradas; os temas e valores vêm do catálogo da Loja de Temas Tray e podem mudar — confira sempre a página e a demonstração vigentes antes de fechar. Os dados de mercado citados são de referências públicas (Baymard Institute, Opinion Box/Octadesk, ABComm) e servem de apoio ao discurso, não como promessa de resultado.</p>
 
 <script>
@@ -3361,123 +3361,97 @@ async function gerarPDFDiagnostico(){
     const nomeArq=(L.host||'loja').replace(/[^a-z0-9]/gi,'-').toLowerCase();
 
     // ── elemento a capturar ──────────────────────────────────────────────────
-    // Clona o #results para uma div off-screen com largura fixa A4 equivalente
     const source=document.getElementById('results');
     if(!source||!source.classList.contains('on')){
       alert('Rode a análise antes de exportar.'); return;
     }
 
-    // Cria wrapper off-screen com largura A4 (794px ≈ 210mm a 96dpi)
+    // Clone off-screen com largura fixa A4
     const wrapper=document.createElement('div');
-    wrapper.style.cssText='position:fixed;top:0;left:-9999px;width:794px;background:#f0f4f8;padding:0;margin:0;z-index:-1;overflow:hidden';
-    // Clona o conteúdo completo excluindo seções internas (temas, argumentos, guia de reunião)
-    // Para o diagnóstico: mantém raio-x, fortes, fracos, perfil, redes sociais, SEO de produto
+    wrapper.style.cssText='position:fixed;top:0;left:-9999px;width:800px;background:#f0f4f8;padding:0;margin:0;overflow:visible;z-index:-1';
     const clone=source.cloneNode(true);
 
-    // Remove seções que são internas (temas, argumentos, guia reunião, benchmark)
-    const setsToHide=['section-temas','section-args','section-guia','section-bench','section-melh'];
-    // Remove pelo kicker text — temas, argumentos, guia
+    // Remove seções internas (temas, argumentos, benchmark, guia)
     clone.querySelectorAll('.kicker').forEach(k=>{
       const txt=(k.textContent||'').toLowerCase();
       if(/5\s*·\s*tema|6\s*·\s*dados|7\s*·\s*onde|8\s*·\s*argum|9\s*·\s*guia/.test(txt)){
         const sec=k.closest('.section'); if(sec) sec.remove();
       }
     });
-    // Remove botões de ação do clone
-    clone.querySelectorAll('.final-actions,.copy,.btn,.btn-pdf').forEach(el=>el.remove());
-    // Ajusta estilos para impressão
-    clone.style.cssText='width:794px;min-width:794px;padding:24px 32px;box-sizing:border-box;';
-
+    // Remove botões de ação
+    clone.querySelectorAll('.final-actions,.copy,.btn,.btn-pdf,[id$="-btn"]').forEach(el=>el.remove());
+    clone.style.cssText='width:800px;min-width:800px;padding:28px 36px;box-sizing:border-box;';
     wrapper.appendChild(clone);
     document.body.appendChild(wrapper);
 
     // Aguarda render
-    await new Promise(r=>setTimeout(r,400));
+    await new Promise(r=>setTimeout(r,600));
 
     // ── captura com html2canvas ──────────────────────────────────────────────
     const canvas=await html2canvas(wrapper,{
-      scale:2,              // 2x para nitidez
+      scale:2,
       useCORS:true,
       allowTaint:true,
       backgroundColor:'#f0f4f8',
-      width:794,
-      scrollX:0, scrollY:0,
-      windowWidth:794,
+      width:800,
+      scrollX:0,
+      scrollY:0,
+      windowWidth:800,
       logging:false,
     });
 
     document.body.removeChild(wrapper);
 
-    // ── divide em páginas A4 ─────────────────────────────────────────────────
+    // ── divide em páginas A4 via canvas fatiado ──────────────────────────────
     const {jsPDF}=window.jspdf;
-    const imgData=canvas.toDataURL('image/jpeg',0.92);
-
-    // A4: 210×297mm → em pontos pt: 595×842
-    const pdfW=595, pdfH=842;
-    const margin=24; // margem lateral em pt
-
-    // largura da imagem no PDF (descontando margens)
+    // A4 em pt: 595 × 842
+    const pdfW=595, pdfH=842, margin=20;
     const imgW=pdfW-margin*2;
-    // altura total da imagem em pt (proporcional)
-    const imgTotalH=canvas.height*(imgW/canvas.width);
-    // altura útil por página (descontando margens topo/base)
-    const pageH=pdfH-margin*2;
+
+    // px por pt na imagem capturada (scale:2 → canvas.width = 800*2 = 1600px = imgW pt)
+    const pxPerPt=canvas.width/imgW;
+    // altura total da imagem em pt
+    const imgTotalPt=canvas.height/pxPerPt;
+    // área útil por página
+    const pageAreaPt=pdfH-margin*2;
 
     const doc=new jsPDF({unit:'pt',format:'a4',orientation:'portrait'});
-
-    let offsetY=0; // posição vertical consumida na imagem (em pt)
     let page=0;
+    let yPt=0; // posição consumida em pt
 
-    while(offsetY<imgTotalH){
+    while(yPt<imgTotalPt){
       if(page>0) doc.addPage();
 
-      // recorte da imagem em px correspondente a esta página
-      const sliceH=Math.min(pageH, imgTotalH-offsetY);
+      const sliceHPt=Math.min(pageAreaPt, imgTotalPt-yPt);
+      const sliceYPx=Math.round(yPt*pxPerPt);
+      const sliceHPx=Math.round(sliceHPt*pxPerPt);
 
-      // desenha a fatia
-      doc.addImage(
-        imgData,'JPEG',
-        margin,          // x
-        margin,          // y
-        imgW,            // largura na página
-        sliceH,          // altura na página
-        '',
-        'FAST',
-        0,
-        // srcX, srcY, srcW, srcH em px no canvas original
-        // usamos o canvas inteiro e deixamos jsPDF recortar via clip
-      );
+      // recorte da fatia em novo canvas
+      const slice=document.createElement('canvas');
+      slice.width=canvas.width;
+      slice.height=Math.min(sliceHPx, canvas.height-sliceYPx);
+      if(slice.height<=0) break;
 
-      // Para recortar corretamente: redesenha com offset negativo
-      // Remove o addImage acima e substitui por recorte manual via canvas
-      doc.deletePage(doc.getCurrentPageInfo().pageNumber);
-      if(page>0) doc.addPage(); else { /* página 1 já existe */ }
+      const ctx=slice.getContext('2d');
+      ctx.drawImage(canvas,0,sliceYPx,canvas.width,slice.height,0,0,canvas.width,slice.height);
+      const sliceData=slice.toDataURL('image/jpeg',0.92);
+      const sliceHPtReal=slice.height/pxPerPt;
 
-      // Recorta fatia do canvas
-      const slicePx=Math.round(offsetY*(canvas.width/imgW));
-      const sliceHPx=Math.round(pageH*(canvas.width/imgW));
-      const sliceCanvas=document.createElement('canvas');
-      sliceCanvas.width=canvas.width;
-      sliceCanvas.height=Math.min(sliceHPx, canvas.height-slicePx);
-      const ctx=sliceCanvas.getContext('2d');
-      ctx.drawImage(canvas,0,-slicePx);
-      const sliceData=sliceCanvas.toDataURL('image/jpeg',0.92);
-      const sliceHPt=sliceCanvas.height*(imgW/canvas.width);
-
-      doc.addImage(sliceData,'JPEG',margin,margin,imgW,sliceHPt);
+      doc.addImage(sliceData,'JPEG',margin,margin,imgW,sliceHPtReal);
 
       // rodapé
       doc.setFontSize(7); doc.setTextColor(160,170,190);
       doc.setFont('helvetica','normal');
-      doc.text('Diagnóstico · '+(L.nomeLoja||L.host||''),margin,pdfH-10);
-      if(vendedor.nome) doc.text(vendedor.nome,pdfW/2,pdfH-10,{align:'center'});
-      doc.text('Pág.'+(page+1),pdfW-margin,pdfH-10,{align:'right'});
+      doc.text('Diagnóstico · '+(L.nomeLoja||L.host||''),margin,pdfH-8);
+      if(vendedor&&vendedor.nome) doc.text(vendedor.nome,pdfW/2,pdfH-8,{align:'center'});
+      doc.text('Pág.'+(page+1),pdfW-margin,pdfH-8,{align:'right'});
 
-      offsetY+=pageH;
+      yPt+=pageAreaPt;
       page++;
     }
 
     doc.save('diagnostico-'+nomeArq+'.pdf');
+
   } catch(err){
     console.error('Erro ao gerar PDF:', err);
     alert('Erro ao gerar PDF: '+err.message);
