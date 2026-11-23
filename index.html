@@ -364,7 +364,7 @@
   </div>
 </div>
 
-<p class="ver-stamp">v3.1.1 · Análise de Performance e UX · Expansão · Time Comercial</p>
+<p class="ver-stamp">v3.1.2 · Análise de Performance e UX · Expansão · Time Comercial</p>
 <p class="foot">O diagnóstico é montado a partir do que está visível no código público da loja no momento da análise. A recomendação de tema cruza o segmento detectado com as lacunas encontradas; os temas e valores vêm do catálogo da Loja de Temas Tray e podem mudar — confira sempre a página e a demonstração vigentes antes de fechar. Os dados de mercado citados são de referências públicas (Baymard Institute, Opinion Box/Octadesk, ABComm) e servem de apoio ao discurso, não como promessa de resultado.</p>
 
 <script>
@@ -3371,14 +3371,49 @@ async function gerarPDFDiagnostico(){
     wrapper.style.cssText='position:fixed;top:0;left:-9999px;width:800px;background:#f0f4f8;padding:0;margin:0;overflow:visible;z-index:-1';
     const clone=source.cloneNode(true);
 
-    // Remove seções internas (temas, argumentos, benchmark, guia)
+    // Seções a REMOVER do diagnóstico (são internas do vendedor)
+    const REMOVER=[
+      'temas recomendados',
+      'dados de mercado',
+      'onde a conversão',
+      'argumentos prontos',
+      'só para o vendedor',
+      'para o vendedor',
+      'guia de abordagem',
+    ];
     clone.querySelectorAll('.kicker').forEach(k=>{
-      const txt=(k.textContent||'').toLowerCase();
-      if(/5\s*·\s*tema|6\s*·\s*dados|7\s*·\s*onde|8\s*·\s*argum|9\s*·\s*guia/.test(txt)){
-        const sec=k.closest('.section'); if(sec) sec.remove();
+      const txt=(k.textContent||'').toLowerCase().trim();
+      // remove se o kicker bate com qualquer item da lista (sem o número do prefixo)
+      const semNum=txt.replace(/^\d+\s*·\s*/,'');
+      if(REMOVER.some(r=>semNum.includes(r)||txt.includes(r))){
+        const sec=k.closest('.section,.guide'); if(sec) sec.remove();
       }
     });
-    // Remove botões de ação
+    // Remove seção de conclusão (div.concl dentro de .section)
+    clone.querySelectorAll('.concl').forEach(el=>{
+      const sec=el.closest('.section'); if(sec) sec.remove(); else el.remove();
+    });
+    // Remove cards de temas (classe "theme") e sua seção pai
+    clone.querySelectorAll('.theme').forEach(el=>{
+      const sec=el.closest('.section'); if(sec) sec.remove(); else el.remove();
+    });
+    // Remove bloco de bench/dados de mercado
+    clone.querySelectorAll('.bench').forEach(el=>{
+      const sec=el.closest('.section'); if(sec) sec.remove(); else el.remove();
+    });
+    // Remove bloco de argumentos prontos
+    clone.querySelectorAll('.arg').forEach(el=>{
+      const sec=el.closest('.section'); if(sec) sec.remove(); else el.remove();
+    });
+    // Remove seção de melhorias/recomendações práticas
+    clone.querySelectorAll('.melhoria,.melh').forEach(el=>{
+      const sec=el.closest('.section'); if(sec) sec.remove(); else el.remove();
+    });
+    // Remove guia de abordagem
+    clone.querySelectorAll('.guide,.gnote').forEach(el=>{
+      const sec=el.closest('.section'); if(sec) sec.remove(); else el.remove();
+    });
+    // Remove botões de ação internos
     clone.querySelectorAll('.final-actions,.copy,.btn,.btn-pdf,[id$="-btn"]').forEach(el=>el.remove());
     clone.style.cssText='width:800px;min-width:800px;padding:28px 36px;box-sizing:border-box;';
     wrapper.appendChild(clone);
