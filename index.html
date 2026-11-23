@@ -364,7 +364,7 @@
   </div>
 </div>
 
-<p class="ver-stamp">v3.1.2 · Análise de Performance e UX · Expansão · Time Comercial</p>
+<p class="ver-stamp">v3.1.3 · Análise de Performance e UX · Expansão · Time Comercial</p>
 <p class="foot">O diagnóstico é montado a partir do que está visível no código público da loja no momento da análise. A recomendação de tema cruza o segmento detectado com as lacunas encontradas; os temas e valores vêm do catálogo da Loja de Temas Tray e podem mudar — confira sempre a página e a demonstração vigentes antes de fechar. Os dados de mercado citados são de referências públicas (Baymard Institute, Opinion Box/Octadesk, ABComm) e servem de apoio ao discurso, não como promessa de resultado.</p>
 
 <script>
@@ -3437,51 +3437,80 @@ async function gerarPDFDiagnostico(){
 
     document.body.removeChild(wrapper);
 
-    // ── divide em páginas A4 via canvas fatiado ──────────────────────────────
+    // ── calcula quebras de página respeitando limites de elementos ───────────
+    // Coleta as posições dos elementos "quebradores" (cards, seções) no clone
+    // para evitar cortar um card no meio de uma página
+    const escala=canvas.width/800; // px por px do DOM (scale:2 → 2px canvas por 1px DOM)
+
+    // Elementos que não devem ser cortados: cards, seções, itens de SEO, etc.
+    const blocos=[...clone.querySelectorAll(
+      '.good,.pain,.seo-card,.rede-card,.section,.xray,.tematual,.ux-card'
+    )];
+
+    // Monta lista de "pontos de quebra seguros" em px do canvas
+    // = posições Y onde o topo de um elemento começa
+    const breakPoints=new Set([0]);
+    const cloneRect=clone.getBoundingClientRect();
+    blocos.forEach(el=>{
+      const r=el.getBoundingClientRect();
+      const topRelativo=r.top-cloneRect.top; // px relativo ao clone
+      const topCanvas=Math.round(topRelativo*escala);
+      if(topCanvas>0&&topCanvas<canvas.height) breakPoints.add(topCanvas);
+    });
+    const sortedBreaks=[...breakPoints].sort((a,b)=>a-b);
+
+    // ── divide em páginas usando os break points ──────────────────────────────
     const {jsPDF}=window.jspdf;
-    // A4 em pt: 595 × 842
     const pdfW=595, pdfH=842, margin=20;
     const imgW=pdfW-margin*2;
-
-    // px por pt na imagem capturada (scale:2 → canvas.width = 800*2 = 1600px = imgW pt)
-    const pxPerPt=canvas.width/imgW;
-    // altura total da imagem em pt
-    const imgTotalPt=canvas.height/pxPerPt;
-    // área útil por página
-    const pageAreaPt=pdfH-margin*2;
+    const pxPerPt=canvas.width/imgW; // px do canvas por pt do PDF
+    const pageHPx=Math.round((pdfH-margin*2)*pxPerPt); // altura útil em px do canvas
 
     const doc=new jsPDF({unit:'pt',format:'a4',orientation:'portrait'});
     let page=0;
-    let yPt=0; // posição consumida em pt
+    let startPx=0; // pixel do canvas onde começa a página atual
 
-    while(yPt<imgTotalPt){
-      if(page>0) doc.addPage();
-
-      const sliceHPt=Math.min(pageAreaPt, imgTotalPt-yPt);
-      const sliceYPx=Math.round(yPt*pxPerPt);
-      const sliceHPx=Math.round(sliceHPt*pxPerPt);
-
-      // recorte da fatia em novo canvas
+    const addSlice=(fromPx,toPx)=>{
+      if(toPx<=fromPx) return;
+      const sliceH=Math.min(toPx-fromPx, canvas.height-fromPx);
+      if(sliceH<=0) return;
       const slice=document.createElement('canvas');
       slice.width=canvas.width;
-      slice.height=Math.min(sliceHPx, canvas.height-sliceYPx);
-      if(slice.height<=0) break;
-
+      slice.height=sliceH;
       const ctx=slice.getContext('2d');
-      ctx.drawImage(canvas,0,sliceYPx,canvas.width,slice.height,0,0,canvas.width,slice.height);
+      ctx.drawImage(canvas,0,fromPx,canvas.width,sliceH,0,0,canvas.width,sliceH);
       const sliceData=slice.toDataURL('image/jpeg',0.92);
-      const sliceHPtReal=slice.height/pxPerPt;
-
-      doc.addImage(sliceData,'JPEG',margin,margin,imgW,sliceHPtReal);
-
-      // rodapé
-      doc.setFontSize(7); doc.setTextColor(160,170,190);
-      doc.setFont('helvetica','normal');
+      const sliceHPt=sliceH/pxPerPt;
+      doc.addImage(sliceData,'JPEG',margin,margin,imgW,sliceHPt);
+      doc.setFontSize(7); doc.setTextColor(160,170,190); doc.setFont('helvetica','normal');
       doc.text('Diagnóstico · '+(L.nomeLoja||L.host||''),margin,pdfH-8);
       if(vendedor&&vendedor.nome) doc.text(vendedor.nome,pdfW/2,pdfH-8,{align:'center'});
       doc.text('Pág.'+(page+1),pdfW-margin,pdfH-8,{align:'right'});
+    };
 
-      yPt+=pageAreaPt;
+    while(startPx<canvas.height){
+      if(page>0) doc.addPage();
+
+      // limite máximo desta página em px
+      const maxEndPx=startPx+pageHPx;
+      if(maxEndPx>=canvas.height){
+        // última página — vai até o fim
+        addSlice(startPx, canvas.height);
+        break;
+      }
+
+      // encontra o break point mais próximo ABAIXO do limite da página
+      // (elemento que começa antes do limite → corta antes dele)
+      let endPx=maxEndPx;
+      for(let i=sortedBreaks.length-1;i>=0;i--){
+        if(sortedBreaks[i]<=maxEndPx&&sortedBreaks[i]>startPx+pageHPx*0.4){
+          endPx=sortedBreaks[i];
+          break;
+        }
+      }
+
+      addSlice(startPx, endPx);
+      startPx=endPx;
       page++;
     }
 
