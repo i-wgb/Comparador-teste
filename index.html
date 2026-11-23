@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root{
     --ink:#00012A; --ink-2:#252D69; --muted:#6B77A0;
@@ -363,7 +364,7 @@
   </div>
 </div>
 
-<p class="ver-stamp">v3.0.1 · Análise de Performance e UX · Expansão · Time Comercial</p>
+<p class="ver-stamp">v3.1.0 · Análise de Performance e UX · Expansão · Time Comercial</p>
 <p class="foot">O diagnóstico é montado a partir do que está visível no código público da loja no momento da análise. A recomendação de tema cruza o segmento detectado com as lacunas encontradas; os temas e valores vêm do catálogo da Loja de Temas Tray e podem mudar — confira sempre a página e a demonstração vigentes antes de fechar. Os dados de mercado citados são de referências públicas (Baymard Institute, Opinion Box/Octadesk, ABComm) e servem de apoio ao discurso, não como promessa de resultado.</p>
 
 <script>
@@ -3347,281 +3348,142 @@ function generatePDF(){
   doc.save('raio-x-tema-'+nomeArq+'.pdf');
 }
 
-function gerarPDFDiagnostico(){
+async function gerarPDFDiagnostico(){
   if(!state||!state.loja){ alert('Rode a análise antes de exportar.'); return; }
-  const L=state.loja;
-  const {jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'portrait',unit:'pt',format:'a4'});
-  const W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight();
-  const M=48; let y=M; let pgNum=1;
+  if(typeof html2canvas==='undefined'){ alert('Aguarde o carregamento completo da página e tente novamente.'); return; }
 
-  const INK=[0,1,42],INK2=[44,62,100],MUT=[120,140,170],TEAL=[0,160,220],TEALD=[0,120,180];
-  const GREEN=[22,163,74],RED=[185,28,28],GOLD=[161,98,7];
-  const BG=[237,245,251],BGCARD=[248,252,255],LINE=[210,228,240];
+  const btn=document.getElementById('pdf-diag-btn');
+  const textoOriginal=btn?btn.innerHTML:'';
+  if(btn){ btn.innerHTML='<span style="opacity:.7">Gerando PDF…</span>'; btn.disabled=true; }
 
-  const col=c=>doc.setTextColor(c[0],c[1],c[2]);
-  const fill=c=>doc.setFillColor(c[0],c[1],c[2]);
-  const draw=c=>doc.setDrawColor(c[0],c[1],c[2]);
-  const setF=(s,w)=>{ doc.setFontSize(s); doc.setFont('helvetica',w||'normal'); };
-  const scoreColor=v=>v>=70?TEAL:v>=45?GOLD:RED;
-  const labelNota=v=>v>=70?'Bom':v>=45?'Em evolução':'Precisa de atenção';
+  try{
+    const L=state.loja;
+    const nomeArq=(L.host||'loja').replace(/[^a-z0-9]/gi,'-').toLowerCase();
 
-  const footerFn=()=>{
-    const pg=doc.getCurrentPageInfo().pageNumber;
-    setF(7,'normal'); col(MUT);
-    draw(LINE); doc.setLineWidth(0.4); doc.line(M,H-32,W-M,H-32);
-    doc.text('Diagnóstico de E-commerce · '+(L.nomeLoja||L.host||''),M,H-20);
-    if(vendedor.nome) doc.text(vendedor.nome,W/2,H-20,{align:'center'});
-    doc.text('Página '+pg,W-M,H-20,{align:'right'});
-  };
-
-  // nova página sempre em nova seção — garante que cada assunto começa numa página limpa
-  const novaPagina=()=>{ footerFn(); doc.addPage(); pgNum++; y=M+10; };
-
-  // "need": se não couber, quebra página
-  const need=n=>{ if(y+n>H-60) novaPagina(); };
-
-  const wrapT=(txt,fs,fw,co,lh,x,mw)=>{
-    if(!txt) return 0;
-    setF(fs,fw); col(co);
-    const lines=doc.splitTextToSize(String(txt),(mw||W-2*M));
-    lines.forEach(l=>{ need(lh+4); doc.text(l,x||M,y); y+=lh; });
-    return lines.length;
-  };
-
-  // Cabeçalho de seção — sempre inicia em nova página
-  const secao=(kicker,titulo,subtitulo)=>{
-    novaPagina();
-    setF(7,'bold'); col(TEAL); doc.text(kicker.toUpperCase(),M,y); y+=14;
-    setF(18,'bold'); col(INK); doc.text(titulo,M,y); y+=9;
-    draw(TEAL); doc.setLineWidth(2.5); doc.line(M,y,M+55,y);
-    draw(LINE); doc.setLineWidth(0.4); doc.line(M+57,y,W-M,y);
-    y+=18;
-    if(subtitulo){ wrapT(subtitulo,9.5,'normal',MUT,13,M,W-2*M); y+=10; }
-  };
-
-  /* ══ PÁG 1 — CAPA / RESUMO EXECUTIVO ═══════════════════════════ */
-  // cabeçalho de identificação
-  fill([0,1,42]); doc.rect(0,0,W,90,'F');
-  fill(TEAL); doc.rect(0,0,W,5,'F');
-  setF(8,'bold'); doc.setTextColor(TEAL[0],TEAL[1],TEAL[2]);
-  doc.text('DIAGNÓSTICO DE EXPERIÊNCIA DE COMPRA',M,34);
-  setF(20,'bold'); doc.setTextColor(255,255,255);
-  doc.text((L.nomeLoja||L.host||'Loja').slice(0,55),M,58);
-  setF(9,'normal'); doc.setTextColor(180,200,220);
-  doc.text((L.host||'').toLowerCase(),M,74);
-  if(vendedor.nome){ setF(8,'normal'); doc.text(vendedor.nome+'  ·  '+new Date().toLocaleDateString('pt-BR'),W-M,74,{align:'right'}); }
-  y=110;
-
-  // bloco de score + perfil lado a lado
-  // score
-  const scX=M, scY=y;
-  const sc=L.score.total;
-  const scCor=scoreColor(sc);
-  fill(BG); doc.roundedRect(scX,scY,110,72,8,8,'F');
-  draw(scCor); doc.setLineWidth(2); doc.roundedRect(scX,scY,110,72,8,8,'S');
-  setF(7,'bold'); col(MUT); doc.text('SCORE GERAL',scX+55,scY+14,{align:'center'});
-  setF(34,'bold'); col(scCor); doc.text(String(sc),scX+55,scY+46,{align:'center'});
-  setF(8,'normal'); col(MUT); doc.text('/100 · '+L.score.rotulo,scX+55,scY+62,{align:'center'});
-
-  // perfil
-  const pX=M+122;
-  fill(BGCARD); doc.roundedRect(pX,scY,W-M-pX,72,8,8,'F');
-  const kv=(k,v,px,py)=>{ setF(7.5,'normal'); col(MUT); doc.text(k,px,py); setF(9.5,'bold'); col(INK); doc.text(String(v).slice(0,28),px,py+13); };
-  kv('Segmento',L.perfil.segmento.nome,pX+10,scY+16);
-  kv('Porte',cap(L.perfil.porte),pX+130,scY+16);
-  kv('Produtos',L.perfil.produtos||'—',pX+10,scY+48);
-  kv('Ticket',L.perfil.precos.ok?brl(L.perfil.precos.mediana):'—',pX+130,scY+48);
-  y=scY+88;
-
-  // resumo executivo
-  setF(11,'bold'); col(TEALD); doc.text('Resumo Executivo',M,y); y+=6;
-  draw(TEAL); doc.setLineWidth(1.5); doc.line(M,y,W-M,y); y+=12;
-  const nFortes=state.fortes?state.fortes.length:0, nFracos=state.fracos?state.fracos.length:0;
-  const frentesFrageis=L.score.eixos.filter(e=>e.valor<50).map(e=>e.nome.toLowerCase());
-  const frentesOk=L.score.eixos.filter(e=>e.valor>=70).map(e=>e.nome.toLowerCase());
-  let resumo=cap(L.perfil.porte)+' operação de '+L.perfil.segmento.nome+(L.perfil.precos.ok?' com ticket médio de '+brl(L.perfil.precos.mediana):'')+'. ';
-  if(frentesOk.length) resumo+='Bom desempenho em '+listPt(frentesOk)+'. ';
-  if(frentesFrageis.length) resumo+='As frentes que mais impactam a conversão hoje são '+listPt(frentesFrageis)+' — maiores oportunidades de crescimento sem aumentar tráfego. ';
-  resumo+='Foram identificados '+nFortes+' ponto'+(nFortes!==1?'s':'')+' forte'+(nFortes!==1?'s':'')+' e '+nFracos+' oportunidade'+(nFracos!==1?'s':'')+' de melhoria com evidência direta no código da loja.';
-  fill(BG); doc.roundedRect(M,y-4,W-2*M,100,6,6,'F');
-  draw(TEAL); doc.setLineWidth(3); doc.line(M,y-4,M,y+96);
-  wrapT(resumo,10,'normal',INK2,14,M+12,W-2*M-16);
-  y+=12;
-
-  /* ══ NOTAS POR FRENTE — nova página ══════════════════════════════ */
-  secao('Diagnóstico por frente','Análise da Experiência de Compra',
-    'Cada frente foi avaliada com base na leitura direta do código da loja. As notas refletem o estado atual.');
-  L.score.eixos.forEach(e=>{
-    need(52);
-    const cor=scoreColor(e.valor);
-    const lbl=labelNota(e.valor);
-    fill(BGCARD); doc.roundedRect(M,y,W-2*M,38,5,5,'F');
-    draw(cor); doc.setLineWidth(3); doc.line(M,y,M,y+38);
-    setF(10.5,'bold'); col(INK); doc.text(e.nome,M+14,y+14);
-    setF(8,'bold'); col(cor); doc.text(lbl,W-M-68,y+14,{align:'right'});
-    setF(13,'bold'); col(cor); doc.text(e.valor+'/100',W-M,y+14,{align:'right'});
-    const bw=W-2*M-14, bx=M+14, by=y+24;
-    fill([225,232,242]); doc.roundedRect(bx,by,bw,5,2,2,'F');
-    fill(cor); doc.roundedRect(bx,by,Math.max(3,bw*e.valor/100),5,2,2,'F');
-    y+=48;
-  });
-
-  /* ══ PONTOS FORTES — nova página ═════════════════════════════════ */
-  if(state.fortes&&state.fortes.length){
-    secao('O que está funcionando bem','Pontos Fortes Identificados',
-      'Recursos e boas práticas já presentes na loja que contribuem positivamente para a experiência de compra.');
-    state.fortes.forEach(f=>{
-      const lT=doc.splitTextToSize(f.titulo||'',W-2*M-36);
-      const lD=doc.splitTextToSize(f.txt||'',W-2*M-36);
-      const ch=12+lT.length*13+lD.length*12+10;
-      need(ch+8);
-      fill([240,252,244]); doc.roundedRect(M,y,W-2*M,ch,5,5,'F');
-      draw(GREEN); doc.setLineWidth(3); doc.line(M,y,M,y+ch);
-      setF(10,'bold'); col(GREEN); doc.text('✓',M+8,y+14);
-      setF(10.5,'bold'); col(INK);
-      let ty=y+14;
-      lT.forEach(l=>{ doc.text(l,M+22,ty); ty+=13; });
-      setF(9,'normal'); col(INK2);
-      lD.forEach(l=>{ doc.text(l,M+22,ty); ty+=12; });
-      y+=ch+10;
-    });
-  }
-
-  /* ══ OPORTUNIDADES DE MELHORIA — nova página ═════════════════════ */
-  const fracosSorted=[...(state.fracos||[])].sort((a,b)=>{
-    if(a.isConfig&&!b.isConfig) return 1; if(!a.isConfig&&b.isConfig) return -1;
-    if(a.bench&&!b.bench) return -1; if(!a.bench&&b.bench) return 1; return 0;
-  });
-  secao('Onde há espaço para crescer','Oportunidades de Melhoria',
-    'Ordenadas por potencial de impacto na conversão. Cada ponto foi identificado com evidência no código da loja.');
-  fracosSorted.forEach((d,i)=>{
-    const cor=d.isConfig?GOLD:RED;
-    const bgItem=d.isConfig?[255,248,230]:[255,245,245];
-    const iX=M+10,tX=M+26,cW=W-2*M-36;
-    const lT=doc.splitTextToSize(d.titulo||'',cW);
-    const lEv=(d.evidencias&&d.evidencias.length)?doc.splitTextToSize(d.evidencias.join(' · '),cW):[];
-    const lI=d.impacto?doc.splitTextToSize('Impacto: '+d.impacto,cW):[];
-    const lR=doc.splitTextToSize('Como resolver: '+(d.solucao||''),cW);
-    const lB=d.bench?doc.splitTextToSize('Referência: '+d.bench,cW):[];
-    const altCard=16+lT.length*14+(lEv.length?lEv.length*11+8:0)+(lI.length?lI.length*13+4:0)+lR.length*13+(lB.length?lB.length*11+4:0)+16;
-    need(altCard+10);
-    fill(bgItem); doc.roundedRect(M,y,W-2*M,altCard,5,5,'F');
-    draw(cor); doc.setLineWidth(3); doc.line(M,y,M,y+altCard);
-    let cy=y+16;
-    setF(9,'bold'); col(cor); doc.text(String(i+1)+'.',iX,cy);
-    setF(10.5,'bold'); col(INK); lT.forEach(l=>{ doc.text(l,tX,cy); cy+=14; }); cy+=4;
-    if(lEv.length){ setF(8,'bold'); col(MUT); doc.text('Evidência:',tX,cy); cy+=12; setF(8,'normal'); col(MUT); lEv.forEach(l=>{ doc.text(l,tX,cy); cy+=11; }); cy+=4; }
-    if(lI.length){ setF(8.5,'bold'); col(cor); lI.forEach(l=>{ doc.text(l,tX,cy); cy+=13; }); cy+=4; }
-    setF(9,'bold'); col(TEALD); doc.text('Como resolver:',tX,cy); cy+=13;
-    setF(9,'normal'); col(INK2); lR.forEach(l=>{ doc.text(l,tX,cy); cy+=13; });
-    if(lB.length){ cy+=4; setF(8,'italic'); col(TEALD); lB.forEach(l=>{ doc.text(l,tX,cy); cy+=11; }); }
-    y+=altCard+12;
-  });
-
-  /* ══ SEO DOS PRODUTOS — nova página ══════════════════════════════ */
-  const seoProdutos=state.seoProdutos||[];
-  if(seoProdutos.length){
-    secao('SEO dos produtos','Análise de SEO em '+seoProdutos.length+' Produto'+(seoProdutos.length>1?'s':''),
-      'Análise de título, meta description, H1, descrição completa e simplificada, imagens, canonical, schema.org e Open Graph de cada produto lido ao vivo.');
-    seoProdutos.forEach((p,pi)=>{
-      need(44);
-      fill([230,240,250]); doc.roundedRect(M,y,W-2*M,28,5,5,'F');
-      setF(7,'bold'); col(TEALD); doc.text('PRODUTO '+(pi+1),M+10,y+10);
-      setF(10,'bold'); col(INK);
-      doc.text(doc.splitTextToSize(p.nomeProduto,W-2*M-110)[0],M+74,y+10);
-      const nb=p.problemas.length; const badgeCor=nb===0?GREEN:nb<=2?GOLD:RED;
-      setF(8,'bold'); col(badgeCor);
-      doc.text(nb===0?'Sem problemas':nb+' problema'+(nb!==1?'s':''),W-M,y+10,{align:'right'});
-      if(p.url){ setF(7,'normal'); col(MUT); doc.text(p.url.replace(/^https?:\/\//,'').slice(0,60),M+74,y+20); }
-      y+=36;
-      p.problemas.forEach(prob=>{
-        const lI=doc.splitTextToSize(prob.item,W-2*M-30);
-        const lD=doc.splitTextToSize(prob.detalhe,W-2*M-30);
-        const ch=10+lI.length*12+lD.length*11+8;
-        need(ch+6);
-        fill([255,245,245]); doc.roundedRect(M,y,W-2*M,ch,4,4,'F');
-        draw(RED); doc.setLineWidth(2); doc.line(M,y,M,y+ch);
-        setF(9,'bold'); col(RED); let iy=y+12;
-        lI.forEach(l=>{ doc.text(l,M+12,iy); iy+=12; });
-        setF(8.5,'normal'); col(INK2);
-        lD.forEach(l=>{ doc.text(l,M+12,iy); iy+=11; });
-        y+=ch+6;
-      });
-      if(p.ok.length){
-        need(20);
-        const okTxt='✓ '+p.ok.join('  ·  ');
-        const lOk=doc.splitTextToSize(okTxt,W-2*M-20);
-        setF(8,'normal'); col(GREEN);
-        lOk.forEach(l=>{ need(14); doc.text(l,M+10,y+12); y+=12; });
-        y+=8;
-      }
-      y+=8;
-    });
-    // padrão recorrente
-    const freq={};
-    seoProdutos.flatMap(p=>p.problemas.map(pb=>pb.item.split('(')[0].trim())).forEach(it=>{ freq[it]=(freq[it]||0)+1; });
-    const rec=Object.entries(freq).filter(([,v])=>v>=2).map(([k])=>k);
-    if(rec.length){
-      need(60);
-      fill(BG); doc.roundedRect(M,y,W-2*M,52,6,6,'F');
-      draw(TEALD); doc.setLineWidth(2); doc.line(M,y,M,y+52);
-      setF(9,'bold'); col(TEALD); doc.text('Padrão identificado em mais de um produto',M+12,y+14);
-      setF(9,'normal'); col(INK2);
-      const recTxt=rec.join(', ')+' — resolver na configuração do tema corrige todos de uma vez.';
-      doc.splitTextToSize(recTxt,W-2*M-24).forEach((l,i)=>{ doc.text(l,M+12,y+28+i*12); });
-      y+=60;
+    // ── elemento a capturar ──────────────────────────────────────────────────
+    // Clona o #results para uma div off-screen com largura fixa A4 equivalente
+    const source=document.getElementById('results');
+    if(!source||!source.classList.contains('on')){
+      alert('Rode a análise antes de exportar.'); return;
     }
-  }
 
-  /* ══ PRÓXIMOS PASSOS — nova página ═══════════════════════════════ */
-  const passosTema=fracosSorted.filter(d=>!d.isConfig);
-  const passosConfig=fracosSorted.filter(d=>d.isConfig);
-  // SEO nos próximos passos
-  const seoProbsRecorrentes=(()=>{
-    const freq={};
-    seoProdutos.flatMap(p=>p.problemas.map(pb=>pb.item.split('(')[0].trim())).forEach(it=>{ freq[it]=(freq[it]||0)+1; });
-    return Object.entries(freq).filter(([,v])=>v>=2).map(([k])=>({titulo:'SEO dos produtos: '+k}));
-  })();
-  const passosSeoProd=seoProdutos.length?[{titulo:'Revisar SEO dos produtos: '+seoProdutos.reduce((acc,p)=>acc+p.problemas.length,0)+' problemas encontrados em '+seoProdutos.length+' produto'+(seoProdutos.length>1?'s analisados':' analisado')}]:[];
+    // Cria wrapper off-screen com largura A4 (794px ≈ 210mm a 96dpi)
+    const wrapper=document.createElement('div');
+    wrapper.style.cssText='position:fixed;top:0;left:-9999px;width:794px;background:#f0f4f8;padding:0;margin:0;z-index:-1;overflow:hidden';
+    // Clona o conteúdo completo excluindo seções internas (temas, argumentos, guia de reunião)
+    // Para o diagnóstico: mantém raio-x, fortes, fracos, perfil, redes sociais, SEO de produto
+    const clone=source.cloneNode(true);
 
-  secao('Por onde começar','Próximos Passos Recomendados',
-    'Priorize as ações de maior impacto. Itens marcados como configuração podem ser ativados sem troca de tema.');
-
-  const renderPassos=(lista,icone,label,cor)=>{
-    if(!lista.length) return;
-    need(30);
-    setF(8,'bold'); col(cor); doc.text(icone+' '+label.toUpperCase(),M,y); y+=16;
-    lista.forEach((d,i)=>{
-      const linhas=doc.splitTextToSize(d.titulo||'',W-2*M-36);
-      const ch=10+linhas.length*13;
-      need(ch+6);
-      fill(BGCARD); doc.roundedRect(M,y,W-2*M,ch,4,4,'F');
-      setF(8.5,'bold'); col(cor); doc.text(String(i+1)+'.',M+8,y+13);
-      setF(8.5,'normal'); col(INK);
-      let py=y+13; linhas.forEach(l=>{ doc.text(l,M+22,py); py+=13; });
-      y+=ch+6;
+    // Remove seções que são internas (temas, argumentos, guia reunião, benchmark)
+    const setsToHide=['section-temas','section-args','section-guia','section-bench','section-melh'];
+    // Remove pelo kicker text — temas, argumentos, guia
+    clone.querySelectorAll('.kicker').forEach(k=>{
+      const txt=(k.textContent||'').toLowerCase();
+      if(/5\s*·\s*tema|6\s*·\s*dados|7\s*·\s*onde|8\s*·\s*argum|9\s*·\s*guia/.test(txt)){
+        const sec=k.closest('.section'); if(sec) sec.remove();
+      }
     });
-    y+=10;
-  };
-  renderPassos(passosTema,'▶','PRIORIDADE — Ações que transformam a experiência de compra',TEALD);
-  renderPassos(passosConfig,'⚙','CONFIGURAÇÃO — Recursos já disponíveis, precisam ser ativados',GOLD);
-  if(passosSeoProd.length) renderPassos(passosSeoProd,'🔍','SEO DOS PRODUTOS — melhorias de ranqueamento identificadas',RED);
+    // Remove botões de ação do clone
+    clone.querySelectorAll('.final-actions,.copy,.btn,.btn-pdf').forEach(el=>el.remove());
+    // Ajusta estilos para impressão
+    clone.style.cssText='width:794px;min-width:794px;padding:24px 32px;box-sizing:border-box;';
 
-  /* ══ RODAPÉ FINAL — corrige paginação ════════════════════════════ */
-  footerFn();
-  const totalPgs=doc.getNumberOfPages();
-  for(let p=1;p<=totalPgs;p++){
-    doc.setPage(p);
-    setF(7,'normal'); col(MUT);
-    draw(LINE); doc.setLineWidth(0.4); doc.line(M,H-32,W-M,H-32);
-    doc.text('Diagnóstico de E-commerce · '+(L.nomeLoja||L.host||''),M,H-20);
-    if(vendedor.nome) doc.text(vendedor.nome,W/2,H-20,{align:'center'});
-    doc.text('Página '+p+' de '+totalPgs,W-M,H-20,{align:'right'});
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
+    // Aguarda render
+    await new Promise(r=>setTimeout(r,400));
+
+    // ── captura com html2canvas ──────────────────────────────────────────────
+    const canvas=await html2canvas(wrapper,{
+      scale:2,              // 2x para nitidez
+      useCORS:true,
+      allowTaint:true,
+      backgroundColor:'#f0f4f8',
+      width:794,
+      scrollX:0, scrollY:0,
+      windowWidth:794,
+      logging:false,
+    });
+
+    document.body.removeChild(wrapper);
+
+    // ── divide em páginas A4 ─────────────────────────────────────────────────
+    const {jsPDF}=window.jspdf;
+    const imgData=canvas.toDataURL('image/jpeg',0.92);
+
+    // A4: 210×297mm → em pontos pt: 595×842
+    const pdfW=595, pdfH=842;
+    const margin=24; // margem lateral em pt
+
+    // largura da imagem no PDF (descontando margens)
+    const imgW=pdfW-margin*2;
+    // altura total da imagem em pt (proporcional)
+    const imgTotalH=canvas.height*(imgW/canvas.width);
+    // altura útil por página (descontando margens topo/base)
+    const pageH=pdfH-margin*2;
+
+    const doc=new jsPDF({unit:'pt',format:'a4',orientation:'portrait'});
+
+    let offsetY=0; // posição vertical consumida na imagem (em pt)
+    let page=0;
+
+    while(offsetY<imgTotalH){
+      if(page>0) doc.addPage();
+
+      // recorte da imagem em px correspondente a esta página
+      const sliceH=Math.min(pageH, imgTotalH-offsetY);
+
+      // desenha a fatia
+      doc.addImage(
+        imgData,'JPEG',
+        margin,          // x
+        margin,          // y
+        imgW,            // largura na página
+        sliceH,          // altura na página
+        '',
+        'FAST',
+        0,
+        // srcX, srcY, srcW, srcH em px no canvas original
+        // usamos o canvas inteiro e deixamos jsPDF recortar via clip
+      );
+
+      // Para recortar corretamente: redesenha com offset negativo
+      // Remove o addImage acima e substitui por recorte manual via canvas
+      doc.deletePage(doc.getCurrentPageInfo().pageNumber);
+      if(page>0) doc.addPage(); else { /* página 1 já existe */ }
+
+      // Recorta fatia do canvas
+      const slicePx=Math.round(offsetY*(canvas.width/imgW));
+      const sliceHPx=Math.round(pageH*(canvas.width/imgW));
+      const sliceCanvas=document.createElement('canvas');
+      sliceCanvas.width=canvas.width;
+      sliceCanvas.height=Math.min(sliceHPx, canvas.height-slicePx);
+      const ctx=sliceCanvas.getContext('2d');
+      ctx.drawImage(canvas,0,-slicePx);
+      const sliceData=sliceCanvas.toDataURL('image/jpeg',0.92);
+      const sliceHPt=sliceCanvas.height*(imgW/canvas.width);
+
+      doc.addImage(sliceData,'JPEG',margin,margin,imgW,sliceHPt);
+
+      // rodapé
+      doc.setFontSize(7); doc.setTextColor(160,170,190);
+      doc.setFont('helvetica','normal');
+      doc.text('Diagnóstico · '+(L.nomeLoja||L.host||''),margin,pdfH-10);
+      if(vendedor.nome) doc.text(vendedor.nome,pdfW/2,pdfH-10,{align:'center'});
+      doc.text('Pág.'+(page+1),pdfW-margin,pdfH-10,{align:'right'});
+
+      offsetY+=pageH;
+      page++;
+    }
+
+    doc.save('diagnostico-'+nomeArq+'.pdf');
+  } catch(err){
+    console.error('Erro ao gerar PDF:', err);
+    alert('Erro ao gerar PDF: '+err.message);
+  } finally{
+    if(btn){ btn.innerHTML=textoOriginal; btn.disabled=false; }
   }
-
-  const nomeArq2=(L.host||'loja').replace(/[^a-z0-9]/gi,'-').toLowerCase();
-  doc.save('diagnostico-'+nomeArq2+'.pdf');
 }
 </script>
 </body>
