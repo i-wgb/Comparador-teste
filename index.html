@@ -364,7 +364,7 @@
   </div>
 </div>
 
-<p class="ver-stamp">v3.1.3 · Análise de Performance e UX · Expansão · Time Comercial</p>
+<p class="ver-stamp">v3.2.0 · Análise de Performance e UX · Expansão · Time Comercial</p>
 <p class="foot">O diagnóstico é montado a partir do que está visível no código público da loja no momento da análise. A recomendação de tema cruza o segmento detectado com as lacunas encontradas; os temas e valores vêm do catálogo da Loja de Temas Tray e podem mudar — confira sempre a página e a demonstração vigentes antes de fechar. Os dados de mercado citados são de referências públicas (Baymard Institute, Opinion Box/Octadesk, ABComm) e servem de apoio ao discurso, não como promessa de resultado.</p>
 
 <script>
@@ -1638,25 +1638,35 @@ function parseTemaPagina(html){
     .replace(/\s*[-–]\s*Loja de Temas.*/i,'').replace(/\s*\|\s*Tray.*/i,'').trim();
   rec.nome=nome;
 
-  /* preco do tema - busca padroes especificos da Loja de Temas Tray */
+  /* preco do tema - busca padroes especificos da Loja de Temas Tray
+     O texto pode vir concatenado sem espaco: "R$ 664,0030% OFFR$ 464,80ou 12x"
+     Estrategia: extrai TODOS os valores R$ do HTML bruto (nao do texto), ordena e identifica */
   const precoTemaMatch=(()=>{
-    // Loja de Temas: 'R$ 664,0030% OFFR$ 464,80ou 12x' — preco COM desconto
-    const mOff=T.match(/R\$\s*([\d.]{1,9},\d{2})\s*\d+%\s*OFF\s*R\$\s*([\d.]{1,9},\d{2})/i);
-    if(mOff) return parseFloat(mOff[2].replace(/\./g,'').replace(',','.'));
-    // sem desconto: primeiro R$ antes de 'ou 12x' ou 'sem juros'
-    const mSimples=T.match(/R\$\s*([\d.]{1,9},\d{2})\s*(?:ou\s*12x|sem\s*juros)/i);
-    if(mSimples) return parseFloat(mSimples[1].replace(/\./g,'').replace(',','.'));
-    // 'Subtotal (1) R$ X' = valor final
-    const mSub=T.match(/Subtotal[^R]{0,20}R\$\s*([\d.]{1,9},\d{2})/i);
-    if(mSub) return parseFloat(mSub[1].replace(/\./g,'').replace(',','.'));
-    // fallback: primeiro R$ entre R$50 e R$5000 (exclui servicos caros)
-    const todos=[...(T.matchAll(/R\$\s*([\d.]{1,9},\d{2})/g))]
-      .map(m=>parseFloat(m[1].replace(/\./g,'').replace(',','.'))) 
-      .filter(v=>v>=50&&v<=5000);
-    return todos.length?todos[0]:null;
+    // usa HTML bruto (H) para evitar concatenacao do textContent
+    // padrao com desconto: R$ ORIGINAL% OFFR$ FINAL  (sem espaco entre valor e %)
+    const mOff=H.match(/R\$\s*([\d.,]{3,12})\s*\d{1,3}%\s*OFF\s*R\$\s*([\d.,]{3,12})/i);
+    if(mOff){
+      const v=parseFloat(mOff[2].replace(/\./g,'').replace(',','.'));
+      if(v>=50&&v<=5000) return v;
+    }
+    // padrao sem desconto: R$ VALOR seguido de "ou 12x" ou "sem juros" (pode ter HTML entre eles)
+    const mSimples=H.match(/R\$\s*([\d.,]{3,12})[^<]{0,80}(?:ou\s*12x|sem\s*juros)/i);
+    if(mSimples){
+      const v=parseFloat(mSimples[1].replace(/\./g,'').replace(',','.'));
+      if(v>=50&&v<=5000) return v;
+    }
+    // extrai todos os valores do HTML em contexto de preco de produto/tema
+    const matches=[...H.matchAll(/R\$\s*([\d]{1,3}(?:[.]\d{3})*,\d{2})/g)];
+    const vals=matches.map(m=>parseFloat(m[1].replace(/\./g,'').replace(',','.'))).filter(v=>v>=50&&v<=5000);
+    if(!vals.length) return null;
+    // o preco do tema e geralmente o menor valor acima de R$50 (nao e parcela nem servico)
+    // parcelas tipicamente < R$50; servicos de implantacao > R$1500
+    const candidatos=vals.filter(v=>v>=50&&v<=1500);
+    if(candidatos.length) return Math.min(...candidatos);
+    return Math.min(...vals);
   })();
   if(precoTemaMatch!=null){ rec.preco=precoTemaMatch; }
-  else if(/tema gr.tis|gr.tis para sempre|free plan/i.test(T)&&!T.match(/R\$\s*[\d.]+,\d{2}/)){rec.preco=0;}
+  else if(/tema\s+gr.tis|gr.tis\s+para\s+sempre|\bfree\s+plan/i.test(T)&&!H.match(/R\$\s*[\d]{2,}/)){rec.preco=0;}
   else rec.preco=null;
 
   /* desenvolvedor + diamante */
@@ -2648,62 +2658,74 @@ function formatarSeguidores(n){
 }
 
 async function lerSeguidoresInstagram(username){
-  // Tenta endpoint público do chocodata (sem auth, sem login)
-  const endpoints=[
-    'https://i.instagram.com/api/v1/users/web_profile_info/?username='+username,
-    'https://www.instagram.com/'+username+'/?__a=1&__d=dis',
-  ];
-  for(const ep of endpoints){
-    for(const relay of ['https://api.allorigins.win/raw?url=','https://corsproxy.io/?url=']){
-      try{
-        const r=await fetch(relay+encodeURIComponent(ep),{headers:{'User-Agent':'Mozilla/5.0'}});
-        if(!r.ok) continue;
-        const j=await r.json();
-        // formato web_profile_info
-        const u=j?.data?.user || j?.graphql?.user || j?.user;
-        if(u?.edge_followed_by?.count!=null) return {seguidores:u.edge_followed_by.count, fonte:'instagram-api'};
-        if(u?.follower_count!=null) return {seguidores:u.follower_count, fonte:'instagram-api'};
-      }catch(e){}
-    }
-  }
-  // fallback: og:description da página pública
-  for(const relay of ['https://api.allorigins.win/raw?url=','https://corsproxy.io/?url=']){
-    try{
-      const r=await fetch(relay+encodeURIComponent('https://www.instagram.com/'+username+'/'),{headers:{'User-Agent':'facebookexternalhit/1.1'}});
-      const html=await r.text();
-      // "X Followers, Y Following, Z Posts"
-      const m=html.match(/([\d,]+(?:\.\d+)?[KkMm]?)\s+Followers?/i);
+  const relays=['https://api.allorigins.win/raw?url=','https://corsproxy.io/?url='];
+  // Endpoint 1: Jina renderiza a pagina com JS — retorna texto com dados
+  try{
+    const r=await fetchComTimeout('https://r.jina.ai/https://www.instagram.com/'+username+'/',{headers:{'Accept':'text/plain'}},12000);
+    if(r.ok){
+      const txt=await r.text();
+      const m=txt.match(/(\d[\d,.]*)\s*(?:mil\s*)?[Ff]ollowers?/i)||txt.match(/[Ff]ollowers?[^\d]{0,10}(\d[\d,.]*)/i);
       if(m){
-        let n=m[1].replace(/,/g,'');
-        if(/[Kk]$/.test(n)) n=parseFloat(n)*1000;
-        else if(/[Mm]$/.test(n)) n=parseFloat(n)*1000000;
-        else n=parseFloat(n);
-        if(!isNaN(n)&&n>0) return {seguidores:Math.round(n), fonte:'og-meta'};
+        let n=(m[1]||'0').replace(/[,.]/g,v=>v===','&&m[1].indexOf(',')===m[1].length-4?'.':''  ).replace(/[^\d.]/g,'');
+        const v=parseFloat(n);
+        if(v>0) return {seguidores:Math.round(v),fonte:'jina'};
       }
-      // sacolinha: detecta link de shop
-      const temShop=/<a[^>]+instagram\.com\/[^"]*\/shop/i.test(html)||/shopping_product_tag|instagram-shopping|shop\.instagram/i.test(html);
-      if(temShop) return {seguidores:null, temShop:true, fonte:'shop-detect'};
+    }
+  }catch(e){}
+  // Endpoint 2: api publica sem login
+  for(const relay of relays){
+    try{
+      const ep='https://i.instagram.com/api/v1/users/web_profile_info/?username='+username;
+      const r=await fetchComTimeout(relay+encodeURIComponent(ep),{headers:{'User-Agent':'Mozilla/5.0',Accept:'application/json'}},8000);
+      if(!r.ok) continue;
+      const j=await r.json().catch(()=>null);
+      if(!j) continue;
+      const u=j?.data?.user||j?.graphql?.user||j?.user;
+      const seg=u?.edge_followed_by?.count??u?.follower_count??null;
+      if(seg!=null) return {seguidores:seg,fonte:'ig-api'};
+    }catch(e){}
+  }
+  // Endpoint 3: og:description via relay
+  for(const relay of relays){
+    try{
+      const r=await fetchComTimeout(relay+encodeURIComponent('https://www.instagram.com/'+username+'/'),{headers:{'User-Agent':'facebookexternalhit/1.1'}},8000);
+      if(!r.ok) continue;
+      const html=await r.text();
+      const m=html.match(/(\d[\d,.]*)\s*Followers/i);
+      if(m){
+        const v=parseFloat(m[1].replace(/,/g,''));
+        if(v>0) return {seguidores:Math.round(v),fonte:'og'};
+      }
+      const temShop=/\/shop[/"']/i.test(html)||/shopping_product_tag/i.test(html);
+      if(temShop) return {seguidores:null,temShop:true,fonte:'shop'};
     }catch(e){}
   }
   return null;
 }
 
 async function lerSeguidoresTikTok(username){
-  for(const relay of ['https://api.allorigins.win/raw?url=','https://corsproxy.io/?url=']){
+  const relays=['https://api.allorigins.win/raw?url=','https://corsproxy.io/?url='];
+  // Jina primeiro — renderiza JS
+  try{
+    const r=await fetchComTimeout('https://r.jina.ai/https://www.tiktok.com/@'+username,{},12000);
+    if(r.ok){
+      const txt=await r.text();
+      const m=txt.match(/(\d[\d,.]*)\s*(?:mil\s*)?[Ff]ollowers?/i)||txt.match(/"followerCount"\s*:\s*(\d+)/);
+      if(m){
+        const v=parseFloat((m[1]||'0').replace(/,/g,''));
+        if(v>0) return {seguidores:Math.round(v),fonte:'jina'};
+      }
+    }
+  }catch(e){}
+  for(const relay of relays){
     try{
-      const r=await fetch(relay+encodeURIComponent('https://www.tiktok.com/@'+username),{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}});
+      const r=await fetchComTimeout(relay+encodeURIComponent('https://www.tiktok.com/@'+username),{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}},10000);
+      if(!r.ok) continue;
       const html=await r.text();
-      // JSON blob hidratado no HTML
-      const m=html.match(/"followerCount"\s*:\s*(\d+)/);
-      if(m) return {seguidores:parseInt(m[1],10), fonte:'tiktok-hydration'};
-      // fallback og:description
-      const m2=html.match(/Followers\s*·\s*([\d,.]+[KMk]?)/i);
-      if(m2){
-        let n=m2[1].replace(/,/g,'');
-        if(/[Kk]$/.test(n)) n=parseFloat(n)*1000;
-        else if(/[Mm]$/.test(n)) n=parseFloat(n)*1000000;
-        else n=parseFloat(n);
-        if(!isNaN(n)&&n>0) return {seguidores:Math.round(n), fonte:'og-meta'};
+      const m=html.match(/"followerCount"\s*:\s*(\d+)/)||html.match(/(\d[\d,.]*)\s*Followers/i);
+      if(m){
+        const v=parseInt((m[1]||'0').replace(/,/g,''),10);
+        if(v>0) return {seguidores:v,fonte:'hydration'};
       }
     }catch(e){}
   }
@@ -2711,15 +2733,24 @@ async function lerSeguidoresTikTok(username){
 }
 
 async function lerSeguidoresYoutube(username){
-  // YouTube: busca na página pública
-  for(const relay of ['https://api.allorigins.win/raw?url=','https://corsproxy.io/?url=']){
+  const relays=['https://api.allorigins.win/raw?url=','https://corsproxy.io/?url='];
+  try{
+    const urlYt=username.startsWith('http')?username:'https://www.youtube.com/@'+username;
+    const r=await fetchComTimeout('https://r.jina.ai/'+urlYt,{},12000);
+    if(r.ok){
+      const txt=await r.text();
+      const m=txt.match(/(\d[\d,.]*[KkMmBb]?)\s*(?:mil\s*)?[Ss]ubscribers?/i)||txt.match(/"subscriberCountText"[^"]{0,30}"([^"]+)"/);
+      if(m) return {seguidores:m[1],fonte:'jina',raw:true};
+    }
+  }catch(e){}
+  for(const relay of relays){
     try{
       const urlYt=username.startsWith('http')?username:'https://www.youtube.com/@'+username;
-      const r=await fetch(relay+encodeURIComponent(urlYt),{signal:AbortSignal.timeout(10000)});
+      const r=await fetchComTimeout(relay+encodeURIComponent(urlYt),{},10000);
+      if(!r.ok) continue;
       const html=await r.text();
-      // "subscriberCountText": "1,2 mi"
       const m=html.match(/"subscriberCountText"\s*:\s*\{"simpleText"\s*:\s*"([^"]+)"/);
-      if(m) return {seguidores:m[1], fonte:'youtube-hydration', raw:true};
+      if(m) return {seguidores:m[1],fonte:'hydration',raw:true};
     }catch(e){}
   }
   return null;
@@ -2779,28 +2810,41 @@ async function lerRedesSociais(html, origin){
 
 
 async function lerSemrush(domain){
-  const cleanDomain=domain.replace(/^https?:\/\//,'').replace(/\/.*$/,'');
-  const semUrl='https://www.semrush.com/website/'+cleanDomain+'/overview/';
-  const relays=['https://api.allorigins.win/raw?url=','https://corsproxy.io/?url='];
-  for(const relay of relays){
+  const cleanDomain=domain.replace(/^https?:\/\//,'').replace(/\/.*$/,'').toLowerCase();
+  // Semrush expoe dados publicos via endpoint de widget (nao precisa de login)
+  // Tambem tentamos a pagina de overview com Jina (renderiza JS)
+  const urls=[
+    'https://r.jina.ai/https://www.semrush.com/website/'+cleanDomain+'/overview/',
+    'https://api.allorigins.win/raw?url='+encodeURIComponent('https://www.semrush.com/website/'+cleanDomain+'/overview/'),
+    'https://corsproxy.io/?url='+encodeURIComponent('https://www.semrush.com/website/'+cleanDomain+'/overview/'),
+  ];
+  const parseSem=html=>{
+    if(!html||html.length<200) return null;
+    // Jina retorna markdown/texto — busca padroes de texto
+    const mVis=html.match(/"visits"\s*:\s*(\d+)/)||
+                html.match(/Visits[^\d]{0,20}([\d,]+)/i)||
+                html.match(/"monthlyVisits"\s*:\s*(\d+)/)||
+                html.match(/([\d,]+)\s*(?:visits|visitas)\s*\/\s*mo/i);
+    const mOrg=html.match(/"organicTraffic"\s*:\s*(\d+)/)||
+               html.match(/Organic\s+Traffic[^\d]{0,20}([\d,]+)/i)||
+               html.match(/"organic"\s*:\s*([\d]+)/);
+    const mAuth=html.match(/"authorityScore"\s*:\s*(\d+)/)||
+                html.match(/Authority\s+Score[^\d]{0,10}(\d+)/i)||
+                html.match(/"authority_score"\s*:\s*(\d+)/);
+    const mPaid=html.match(/"paidTraffic"\s*:\s*(\d+)/)||
+                html.match(/Paid\s+Traffic[^\d]{0,20}([\d,]+)/i);
+    const toInt=m=>m?parseInt((m[1]||'0').replace(/,/g,''),10):null;
+    const vis=toInt(mVis), org=toInt(mOrg), auth=toInt(mAuth), paid=toInt(mPaid);
+    if(vis||org||auth) return {visitas:vis,organico:org,pago:paid,authority:auth,domain:cleanDomain};
+    return null;
+  };
+  for(const url of urls){
     try{
-      const r=await fetchComTimeout(relay+encodeURIComponent(semUrl),{},12000);
+      const r=await fetchComTimeout(url,{},14000);
       if(!r.ok) continue;
       const html=await r.text();
-      if(html.length<500) continue;
-      const mVis=html.match(/"visits"\s*:\s*(\d+)/)||html.match(/"monthlyVisits"\s*:\s*(\d+)/);
-      const mOrg=html.match(/"organicTraffic"\s*:\s*(\d+)/)||html.match(/"organic"\s*:\s*\{[^}]{0,30}"value"\s*:\s*(\d+)/);
-      const mAuth=html.match(/"authorityScore"\s*:\s*(\d+)/);
-      const mPaid=html.match(/"paidTraffic"\s*:\s*(\d+)/)||html.match(/"paid"\s*:\s*\{[^}]{0,30}"value"\s*:\s*(\d+)/);
-      if(mVis||mOrg||mAuth){
-        return {
-          visitas:mVis?parseInt(mVis[1],10):null,
-          organico:mOrg?parseInt(mOrg[1],10):null,
-          pago:mPaid?parseInt(mPaid[1],10):null,
-          authority:mAuth?parseInt(mAuth[1],10):null,
-          domain:cleanDomain
-        };
-      }
+      const result=parseSem(html);
+      if(result) return result;
     }catch(e){}
   }
   return null;
@@ -3368,7 +3412,8 @@ async function gerarPDFDiagnostico(){
 
     // Clone off-screen com largura fixa A4
     const wrapper=document.createElement('div');
-    wrapper.style.cssText='position:fixed;top:0;left:-9999px;width:800px;background:#f0f4f8;padding:0;margin:0;overflow:visible;z-index:-1';
+    // position:absolute fora da tela MAS com opacity:0 para que offsetTop/offsetParent funcionem
+    wrapper.style.cssText='position:absolute;top:0;left:0;width:800px;background:#f0f4f8;padding:0;margin:0;overflow:visible;opacity:0;pointer-events:none;z-index:-9999';
     const clone=source.cloneNode(true);
 
     // Seções a REMOVER do diagnóstico (são internas do vendedor)
@@ -3437,51 +3482,46 @@ async function gerarPDFDiagnostico(){
 
     document.body.removeChild(wrapper);
 
-    // ── calcula quebras de página respeitando limites de elementos ───────────
-    // Coleta as posições dos elementos "quebradores" (cards, seções) no clone
-    // para evitar cortar um card no meio de uma página
-    const escala=canvas.width/800; // px por px do DOM (scale:2 → 2px canvas por 1px DOM)
+    // ── coleta posições reais dos blocos via offsetTop no DOM renderizado ────
+    // getBoundingClientRect falha em elementos off-screen; offsetTop é confiável
+    const escala=canvas.width/800; // 2 quando scale:2
 
-    // Elementos que não devem ser cortados: cards, seções, itens de SEO, etc.
+    // Marca cada bloco com seu offsetTop acumulado
+    const getOffsetTop=(el)=>{
+      let top=0, cur=el;
+      while(cur&&cur!==wrapper){ top+=cur.offsetTop; cur=cur.offsetParent; }
+      return top;
+    };
+
     const blocos=[...clone.querySelectorAll(
-      '.good,.pain,.seo-card,.rede-card,.section,.xray,.tematual,.ux-card'
+      '.section,.good,.pain,.seo-card,.rede-card,.xray,.tematual'
     )];
 
-    // Monta lista de "pontos de quebra seguros" em px do canvas
-    // = posições Y onde o topo de um elemento começa
     const breakPoints=new Set([0]);
-    const cloneRect=clone.getBoundingClientRect();
     blocos.forEach(el=>{
-      const r=el.getBoundingClientRect();
-      const topRelativo=r.top-cloneRect.top; // px relativo ao clone
-      const topCanvas=Math.round(topRelativo*escala);
-      if(topCanvas>0&&topCanvas<canvas.height) breakPoints.add(topCanvas);
+      const top=getOffsetTop(el);
+      const topPx=Math.round(top*escala);
+      if(topPx>10&&topPx<canvas.height-10) breakPoints.add(topPx);
     });
     const sortedBreaks=[...breakPoints].sort((a,b)=>a-b);
 
-    // ── divide em páginas usando os break points ──────────────────────────────
+    // ── divide em páginas usando break points ─────────────────────────────────
     const {jsPDF}=window.jspdf;
     const pdfW=595, pdfH=842, margin=20;
     const imgW=pdfW-margin*2;
-    const pxPerPt=canvas.width/imgW; // px do canvas por pt do PDF
-    const pageHPx=Math.round((pdfH-margin*2)*pxPerPt); // altura útil em px do canvas
+    const pxPerPt=canvas.width/imgW;
+    const pageHPx=Math.round((pdfH-margin*2)*pxPerPt);
 
     const doc=new jsPDF({unit:'pt',format:'a4',orientation:'portrait'});
-    let page=0;
-    let startPx=0; // pixel do canvas onde começa a página atual
+    let page=0, startPx=0;
 
     const addSlice=(fromPx,toPx)=>{
-      if(toPx<=fromPx) return;
-      const sliceH=Math.min(toPx-fromPx, canvas.height-fromPx);
-      if(sliceH<=0) return;
-      const slice=document.createElement('canvas');
-      slice.width=canvas.width;
-      slice.height=sliceH;
-      const ctx=slice.getContext('2d');
-      ctx.drawImage(canvas,0,fromPx,canvas.width,sliceH,0,0,canvas.width,sliceH);
-      const sliceData=slice.toDataURL('image/jpeg',0.92);
-      const sliceHPt=sliceH/pxPerPt;
-      doc.addImage(sliceData,'JPEG',margin,margin,imgW,sliceHPt);
+      const h=Math.min(toPx,canvas.height)-fromPx;
+      if(h<=0) return;
+      const sl=document.createElement('canvas');
+      sl.width=canvas.width; sl.height=h;
+      sl.getContext('2d').drawImage(canvas,0,fromPx,canvas.width,h,0,0,canvas.width,h);
+      doc.addImage(sl.toDataURL('image/jpeg',0.93),'JPEG',margin,margin,imgW,h/pxPerPt);
       doc.setFontSize(7); doc.setTextColor(160,170,190); doc.setFont('helvetica','normal');
       doc.text('Diagnóstico · '+(L.nomeLoja||L.host||''),margin,pdfH-8);
       if(vendedor&&vendedor.nome) doc.text(vendedor.nome,pdfW/2,pdfH-8,{align:'center'});
@@ -3490,26 +3530,17 @@ async function gerarPDFDiagnostico(){
 
     while(startPx<canvas.height){
       if(page>0) doc.addPage();
+      const maxEnd=startPx+pageHPx;
+      if(maxEnd>=canvas.height){ addSlice(startPx,canvas.height); break; }
 
-      // limite máximo desta página em px
-      const maxEndPx=startPx+pageHPx;
-      if(maxEndPx>=canvas.height){
-        // última página — vai até o fim
-        addSlice(startPx, canvas.height);
-        break;
-      }
-
-      // encontra o break point mais próximo ABAIXO do limite da página
-      // (elemento que começa antes do limite → corta antes dele)
-      let endPx=maxEndPx;
+      // recua até o break point mais próximo antes do limite da página
+      // mínimo: 35% da página preenchida para não desperdiçar folha
+      let endPx=maxEnd;
       for(let i=sortedBreaks.length-1;i>=0;i--){
-        if(sortedBreaks[i]<=maxEndPx&&sortedBreaks[i]>startPx+pageHPx*0.4){
-          endPx=sortedBreaks[i];
-          break;
-        }
+        const bp=sortedBreaks[i];
+        if(bp<=maxEnd&&bp>startPx+pageHPx*0.35){ endPx=bp; break; }
       }
-
-      addSlice(startPx, endPx);
+      addSlice(startPx,endPx);
       startPx=endPx;
       page++;
     }
