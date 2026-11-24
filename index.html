@@ -364,7 +364,7 @@
   </div>
 </div>
 
-<p class="ver-stamp">v3.2.1 · Análise de Performance e UX · Expansão · Time Comercial</p>
+<p class="ver-stamp">v3.3.0 · Análise de Performance e UX · Expansão · Time Comercial</p>
 <p class="foot">O diagnóstico é montado a partir do que está visível no código público da loja no momento da análise. A recomendação de tema cruza o segmento detectado com as lacunas encontradas; os temas e valores vêm do catálogo da Loja de Temas Tray e podem mudar — confira sempre a página e a demonstração vigentes antes de fechar. Os dados de mercado citados são de referências públicas (Baymard Institute, Opinion Box/Octadesk, ABComm) e servem de apoio ao discurso, não como promessa de resultado.</p>
 
 <script>
@@ -2764,6 +2764,52 @@ async function lerSeguidoresYoutube(username){
   return null;
 }
 
+/* Detecção síncrona de redes — sempre funciona, sem fetch */
+function detectarRedesSociais(html){
+  const dom=new DOMParser().parseFromString(html,'text/html');
+  const links=[...dom.querySelectorAll('a[href]')].map(a=>a.getAttribute('href')||'');
+  const redes={};
+  const padroes={
+    instagram:{rx:/instagram\.com\/(?!p\/|reel\/|stories\/|explore\/|tv\/|hashtag\/|share)/i},
+    facebook:{rx:/facebook\.com\/(?!sharer|share|dialog|plugins|tr[?]|events\/|groups\/)/i},
+    tiktok:{rx:/tiktok\.com\/@[^"'\s#?]+/i},
+    youtube:{rx:/youtube\.com\/(channel|c\b|@|user\/)[^"'\s#?]+/i},
+  };
+  for(const [rede,cfg] of Object.entries(padroes)){
+    const link=links.find(h=>cfg.rx.test(h));
+    if(link){
+      const username=extrairUsername(link,rede);
+      if(username){
+        const url=rede==='instagram'?'https://www.instagram.com/'+username+'/':
+                  rede==='facebook'?'https://www.facebook.com/'+username+'/':
+                  rede==='tiktok'?'https://www.tiktok.com/@'+username:
+                  link.startsWith('http')?link:'https://www.youtube.com/@'+username;
+        redes[rede]={username,url,seguidores:null};
+      }
+    }
+  }
+  // detecta pixel Meta e sacolinha
+  if(redes.facebook){
+    redes.facebook.temPixel=/fbq\s*\(/.test(html);
+    redes.facebook.temShop=/facebook\.com\/shop|facebook\.com\/marketplace/i.test(html);
+  }
+  if(redes.instagram){
+    redes.instagram.temShop=/instagram\.com\/[^"']*\/shop|shopping_product_tag/i.test(html);
+  }
+  return redes;
+}
+
+/* Enriquece objeto de redes com seguidores (assíncrono, pode falhar) */
+async function enriquecerSeguidores(redes){
+  const copy=JSON.parse(JSON.stringify(redes));
+  await Promise.allSettled([
+    copy.instagram?lerSeguidoresInstagram(copy.instagram.username).then(d=>{ if(d){copy.instagram.seguidores=d.seguidores;if(d.temShop)copy.instagram.temShop=true;} }):null,
+    copy.tiktok?lerSeguidoresTikTok(copy.tiktok.username).then(d=>{ if(d)copy.tiktok.seguidores=d.seguidores; }):null,
+    copy.youtube?lerSeguidoresYoutube(copy.youtube.username).then(d=>{ if(d)copy.youtube.seguidores=d.seguidores; }):null,
+  ].filter(Boolean));
+  return copy;
+}
+
 async function lerRedesSociais(html, origin){
   const dom=new DOMParser().parseFromString(html,'text/html');
   const links=[...dom.querySelectorAll('a[href]')].map(a=>a.getAttribute('href')||'');
@@ -2888,11 +2934,14 @@ async function run(){
     // lê redes sociais da loja
     if(lojaUrl){
       lines[1]={s:'load',t:'Lendo redes sociais e tráfego…'}; setStatus(lines);
+      // detecção síncrona garante que redes aparecem mesmo se seguidores falharem
+      const redesBase=detectarRedesSociais(html);
+      extras.redes=redesBase;
       const [redesResult,semrushResult]=await Promise.allSettled([
-        lerRedesSociais(html,originOf(lojaUrl)),
+        enriquecerSeguidores(redesBase),
         lerSemrush(lojaUrl)
       ]);
-      extras.redes=redesResult.status==='fulfilled'?redesResult.value||{}:{};
+      if(redesResult.status==='fulfilled'&&redesResult.value) extras.redes=redesResult.value;
       extras.semrush=semrushResult.status==='fulfilled'?semrushResult.value||null:null;
     }
     if(lojaUrl){ const org=originOf(lojaUrl);
@@ -3229,9 +3278,7 @@ function temaCardHtml(r){ const t=r.tema; const gratis=!t.preco||t.preco<=0; con
   const fxLabel={entrada:'Básico',intermediario:'Intermediário',premium:'Premium'};
   const fxBadge='<span class="faixa-badge '+r.faixa+'">'+(fxLabel[r.faixa]||r.faixa)+'</span>';
   const uxTemaHtml=''; // seção UI/UX/Mobile removida dos cards de tema
-  const precoHtml = gratis
-    ? '<div class="p">Grátis<small>tema gratuito</small></div>'
-    : '<div class="p">'+brl(t.preco)+'<small>ou 12x de '+brl(parcela)+'</small></div>';
+  const precoHtml = ''; // preço ocultado — consultar na página do tema
   /* 3 estados: ficha lida com count | ficha lida sem count (recursos detectados) | não lida */
   const fichaValida=r.cap&&r.cap.fichaValida;
   const demoOk=r.demoLida&&(!r.naoConfirmadoDemo||r.naoConfirmadoDemo.length===0);
@@ -3254,7 +3301,7 @@ function temaCardHtml(r){ const t=r.tema; const gratis=!t.preco||t.preco<=0; con
     '<div class="match">'+ringMatch(r.match)+'<div class="ml"><b>'+r.match+'% de aderência</b><span>ao caso desta loja</span></div></div>'+
     selo+selloDemo+
     '<div class="body"><div class="why">'+esc(r.motivo)+'</div>'+conf+'<div class="tags">'+r.tagsRotulo.map(tg=>'<span class="tg">'+esc(tg)+'</span>').join('')+'</div>'+
-    '<div class="price">'+precoHtml+'<div class="once">compra única<br/>sem mensalidade</div></div></div>'+
+    '<div class="once" style="font-size:11px;color:var(--muted);margin-top:8px">compra única · sem mensalidade</div></div>'+
     uxTemaHtml+'<div class="links"><a class="demo" href="'+esc(t.demo)+'" target="_blank" rel="noopener">Ver demonstração</a><a class="pg" href="'+esc(linkTema)+'" target="_blank" rel="noopener">Página do tema</a></div></div>'; }
 function wireResults(){
   document.querySelectorAll('.arg .copy').forEach(b=>b.addEventListener('click',()=>{ const k=b.getAttribute('data-arg'); const txt=k==='pitch'?state.args.pitch:state.args.blocos[+k].t; copyText(txt,b,'Copiado ✓'); }));
