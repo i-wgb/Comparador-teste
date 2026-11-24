@@ -364,7 +364,7 @@
   </div>
 </div>
 
-<p class="ver-stamp">v3.2.0 · Análise de Performance e UX · Expansão · Time Comercial</p>
+<p class="ver-stamp">v3.2.1 · Análise de Performance e UX · Expansão · Time Comercial</p>
 <p class="foot">O diagnóstico é montado a partir do que está visível no código público da loja no momento da análise. A recomendação de tema cruza o segmento detectado com as lacunas encontradas; os temas e valores vêm do catálogo da Loja de Temas Tray e podem mudar — confira sempre a página e a demonstração vigentes antes de fechar. Os dados de mercado citados são de referências públicas (Baymard Institute, Opinion Box/Octadesk, ABComm) e servem de apoio ao discurso, não como promessa de resultado.</p>
 
 <script>
@@ -1642,31 +1642,39 @@ function parseTemaPagina(html){
      O texto pode vir concatenado sem espaco: "R$ 664,0030% OFFR$ 464,80ou 12x"
      Estrategia: extrai TODOS os valores R$ do HTML bruto (nao do texto), ordena e identifica */
   const precoTemaMatch=(()=>{
-    // usa HTML bruto (H) para evitar concatenacao do textContent
-    // padrao com desconto: R$ ORIGINAL% OFFR$ FINAL  (sem espaco entre valor e %)
-    const mOff=H.match(/R\$\s*([\d.,]{3,12})\s*\d{1,3}%\s*OFF\s*R\$\s*([\d.,]{3,12})/i);
+    // A ficha do tema tem estrutura:
+    // <span class="price">R$ 464,80</span> ou
+    // "R$ 664,00  30% OFF  R$ 464,80  ou 12x de R$ 38,73"
+    // Estrategia 1: elemento com classe price/preco no HTML
+    const domP=new DOMParser().parseFromString(H,'text/html');
+    const priceEl=domP.querySelector('[class*="price"],[class*="preco"],[class*="valor"],[itemprop="price"]');
+    if(priceEl){
+      const ptxt=(priceEl.textContent||'').replace(/[^\d,]/g,'');
+      const v=parseFloat(ptxt.replace(',','.'));
+      if(v>=50&&v<=5000) return v;
+    }
+    // Estrategia 2: padrao com desconto no HTML bruto (tolerante a concatenacao)
+    // "R$ 664,00" seguido de ate 20 chars e "OFF" e outro "R$ X"
+    const mOff=H.match(/R\$[\s]*(\d[\d.]*,\d{2})[^R]{0,25}OFF[^R]{0,5}R\$[\s]*(\d[\d.]*,\d{2})/i);
     if(mOff){
       const v=parseFloat(mOff[2].replace(/\./g,'').replace(',','.'));
       if(v>=50&&v<=5000) return v;
     }
-    // padrao sem desconto: R$ VALOR seguido de "ou 12x" ou "sem juros" (pode ter HTML entre eles)
-    const mSimples=H.match(/R\$\s*([\d.,]{3,12})[^<]{0,80}(?:ou\s*12x|sem\s*juros)/i);
+    // Estrategia 3: R$ antes de "ou 12x" ou "sem juros" no HTML
+    const mSimples=H.match(/R\$[\s]*(\d[\d.]*,\d{2})[^<]{0,60}(?:ou\s+12x|sem\s+juros)/i);
     if(mSimples){
       const v=parseFloat(mSimples[1].replace(/\./g,'').replace(',','.'));
       if(v>=50&&v<=5000) return v;
     }
-    // extrai todos os valores do HTML em contexto de preco de produto/tema
-    const matches=[...H.matchAll(/R\$\s*([\d]{1,3}(?:[.]\d{3})*,\d{2})/g)];
-    const vals=matches.map(m=>parseFloat(m[1].replace(/\./g,'').replace(',','.'))).filter(v=>v>=50&&v<=5000);
-    if(!vals.length) return null;
-    // o preco do tema e geralmente o menor valor acima de R$50 (nao e parcela nem servico)
-    // parcelas tipicamente < R$50; servicos de implantacao > R$1500
-    const candidatos=vals.filter(v=>v>=50&&v<=1500);
-    if(candidatos.length) return Math.min(...candidatos);
-    return Math.min(...vals);
+    // Estrategia 4: todos os R$ no HTML — menor candidato razoavel (50-1200)
+    const vals=[...H.matchAll(/R\$[\s]*(\d{1,3}(?:[.]\d{3})*,\d{2})/g)]
+      .map(m=>parseFloat(m[1].replace(/\./g,'').replace(',','.')))
+      .filter(v=>v>=50&&v<=1200);
+    if(vals.length) return Math.min(...vals);
+    return null;
   })();
   if(precoTemaMatch!=null){ rec.preco=precoTemaMatch; }
-  else if(/tema\s+gr.tis|gr.tis\s+para\s+sempre|\bfree\s+plan/i.test(T)&&!H.match(/R\$\s*[\d]{2,}/)){rec.preco=0;}
+  else if(/gratuito|gr.tis\s+para\s+sempre|plano\s+free/i.test(T)&&!H.match(/R\$[\s]*\d{2,}/)){rec.preco=0;}
   else rec.preco=null;
 
   /* desenvolvedor + diamante */
@@ -3019,7 +3027,7 @@ function render(){
    '<div class="card"><div class="ck">Meios de pagamento na vitrine</div>'+chipsHtml(L.exp.pagamentos)+'<div class="ck" style="margin-top:12px">Frete e entrega</div>'+chipsHtml(L.exp.frete)+'</div></div></div>');
 
   /* Redes Sociais — nova seção */
-  if(state.redesSociais&&Object.keys(state.redesSociais).length){
+  if(state.redesSociais&&Object.keys(state.redesSociais).length||state.semrush){
     const rs=state.redesSociais;
     const redesCss=`<style>
       .redes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:4px}
@@ -3062,10 +3070,37 @@ function render(){
         '</div>';
     }).join('');
 
-    h.push(redesCss+'<div class="section"><div class="sec-title"><span class="kicker">Redes Sociais</span>'+
-      '<h2>Presença nas Redes Sociais</h2></div>'+
-      '<p class="sec-sub">Redes detectadas no HTML da loja. Seguidores lidos ao vivo quando disponíveis via endpoint público.</p>'+
-      '<div class="redes-grid">'+redesCards+'</div></div>');
+    // bloco de redes só se houver redes detectadas
+    if(Object.keys(rs).length){
+      h.push(redesCss+'<div class="section"><div class="sec-title"><span class="kicker">Redes Sociais</span>'+
+        '<h2>Presença nas Redes Sociais</h2></div>'+
+        '<p class="sec-sub">Redes detectadas no HTML da loja. Seguidores lidos ao vivo quando disponíveis.</p>'+
+        '<div class="redes-grid">'+redesCards+'</div></div>');
+    }
+
+    // bloco Semrush — independente das redes
+    if(state.semrush){
+      const sm=state.semrush;
+      const smItems=[];
+      if(sm.visitas!=null) smItems.push('<div class="sm-item"><span class="sm-val">'+formatarSeguidores(sm.visitas)+'</span><span class="sm-lbl">visitas/mês</span></div>');
+      if(sm.organico!=null) smItems.push('<div class="sm-item"><span class="sm-val" style="color:#16a34a">'+formatarSeguidores(sm.organico)+'</span><span class="sm-lbl">tráfego orgânico</span></div>');
+      if(sm.pago!=null&&sm.pago>0) smItems.push('<div class="sm-item"><span class="sm-val" style="color:#2563eb">'+formatarSeguidores(sm.pago)+'</span><span class="sm-lbl">tráfego pago</span></div>');
+      if(sm.authority!=null) smItems.push('<div class="sm-item"><span class="sm-val">'+sm.authority+'</span><span class="sm-lbl">Authority Score</span></div>');
+      if(smItems.length){
+        h.push('<style>.sm-grid{display:flex;gap:20px;flex-wrap:wrap;margin-top:8px}.sm-item{display:flex;flex-direction:column;gap:2px}.sm-val{font-size:22px;font-weight:800;color:var(--ink)}.sm-lbl{font-size:11px;color:var(--muted)}</style>'+
+          '<div class="section"><div class="sec-title"><span class="kicker">Tráfego · Semrush</span>'+
+          '<h2>Tráfego Estimado da Loja</h2></div>'+
+          '<p class="sec-sub">Dados estimados via Semrush público · <a href="https://www.semrush.com/website/'+esc(sm.domain)+'/overview/" target="_blank" style="color:var(--teal-deep)">Ver relatório completo ↗</a></p>'+
+          '<div class="sm-grid">'+smItems.join('')+'</div>'+
+          '<p style="font-size:10px;color:var(--muted);margin-top:10px">Fonte: Semrush · dados estimados, não auditados</p></div>');
+      }
+    } else {
+      // Semrush não retornou dados — mostrar aviso
+      h.push('<div class="section"><div class="sec-title"><span class="kicker">Tráfego · Semrush</span>'+
+        '<h2>Tráfego Estimado da Loja</h2></div>'+
+        '<p class="sec-sub">Não foi possível carregar os dados do Semrush para esta loja via relay público. '+
+        '<a href="https://www.semrush.com/website/'+esc((state.loja&&state.loja.host)||'')+'/overview/" target="_blank" style="color:var(--teal-deep)">Consultar manualmente ↗</a></p></div>');
+    }
   }
 
   /* SEO de produto — nova seção */
@@ -3480,16 +3515,12 @@ async function gerarPDFDiagnostico(){
       logging:false,
     });
 
-    document.body.removeChild(wrapper);
+    // ── coleta posições ANTES de remover do DOM ─────────────────────────────
+    const escala=canvas.width/800;
 
-    // ── coleta posições reais dos blocos via offsetTop no DOM renderizado ────
-    // getBoundingClientRect falha em elementos off-screen; offsetTop é confiável
-    const escala=canvas.width/800; // 2 quando scale:2
-
-    // Marca cada bloco com seu offsetTop acumulado
     const getOffsetTop=(el)=>{
       let top=0, cur=el;
-      while(cur&&cur!==wrapper){ top+=cur.offsetTop; cur=cur.offsetParent; }
+      while(cur&&cur!==wrapper){ top+=cur.offsetTop||0; cur=cur.offsetParent; }
       return top;
     };
 
@@ -3504,6 +3535,9 @@ async function gerarPDFDiagnostico(){
       if(topPx>10&&topPx<canvas.height-10) breakPoints.add(topPx);
     });
     const sortedBreaks=[...breakPoints].sort((a,b)=>a-b);
+
+    // remove do DOM só depois de coletar posições
+    document.body.removeChild(wrapper);
 
     // ── divide em páginas usando break points ─────────────────────────────────
     const {jsPDF}=window.jspdf;
